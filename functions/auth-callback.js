@@ -1,7 +1,8 @@
 export async function onRequestGet(context) {
-  const code = context.params.code;
-  const env = context.env;
   try {
+    const env = context.env;
+    const url = new URL(context.request.url);
+    const code = url.searchParams.get('code');
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
