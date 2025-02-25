@@ -7,7 +7,7 @@ A delicious way to manage your GitHub pull requests! PR Pancakes helps you track
 Visit us at [prpancakes.com](https://prpancakes.com)
 
 ## Features
-
+a
 - 🥞 Track your authored pull requests
 - 🥞 See PRs that need your review
 - 🥞 Monitor team review requests
@@ -66,7 +66,7 @@ In the project directory, you can run:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the [MIT License](LICENSE) - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
