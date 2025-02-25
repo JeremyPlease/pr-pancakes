@@ -163,19 +163,6 @@ const Td = styled.td`
   }
 `;
 
-const PRLink = styled.a`
-  color: #58a6ff;
-  text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s ease;
-
-  &:hover {
-    color: #79c0ff;
-    text-decoration: none;
-    transform: translateX(2px);
-  }
-`;
-
 const PRAuthor = styled.span`
   color: #8b949e;
 `;
@@ -634,11 +621,6 @@ const LoginContainer = styled.div`
     color: #8b949e;
     line-height: 1.6;
   }
-`;
-
-const PancakeEmoji = styled.span`
-  font-size: 1.5em;
-  margin-right: 5px;
 `;
 
 // Create a portal component for the dropdown
