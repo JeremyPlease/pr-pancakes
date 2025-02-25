@@ -334,8 +334,11 @@ const Header = styled.div`
     }
   }
 
-  /* Ensure refresh button is above the pattern */
-  & > button {
+  /* Ensure buttons are above the pattern */
+  .header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     position: relative;
     z-index: 1;
   }
@@ -346,6 +349,11 @@ const Header = styled.div`
 
     h1 {
       font-size: 2.4rem;
+    }
+
+    .header-buttons {
+      width: 100%;
+      justify-content: center;
     }
   }
 `;
@@ -427,6 +435,43 @@ const RefreshButton = styled.button`
   }
 `;
 
+const LogoutButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    background: #30363d;
+    border-color: #8b949e;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+  }
+
+  &:hover svg {
+    transform: translateX(2px);
+  }
+`;
+
 const RefreshIcon = () => (
   <svg
     width="16"
@@ -457,6 +502,23 @@ const RefreshIcon = () => (
     </style>
     <path d="M8 3a5 5 0 0 1 4.546 2.914.5.5 0 0 0 .908-.417A6 6 0 0 0 8 2C5.201 2 2.872 3.757 2.186 6.244a.5.5 0 1 0 .956.291C3.708 4.389 5.67 3 8 3z"/>
     <path d="M8 13a5 5 0 0 1-4.546-2.914.5.5 0 0 0-.908.417A6 6 0 0 0 8 14c2.799 0 5.128-1.757 5.814-4.244a.5.5 0 1 0-.956-.291C12.292 11.611 10.33 13 8 13z"/>
+  </svg>
+);
+
+const LogoutIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
   </svg>
 );
 
@@ -1118,6 +1180,28 @@ function App() {
     return false;
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('github_token');
+    // Reset all state to initial values
+    setToken(null);
+    setPRs({
+      authored: [],
+      directReview: [],
+      teamReview: [],
+      mentioned: []
+    });
+    setSorting({
+      authored: { field: null, direction: null },
+      directReview: { field: null, direction: null },
+      teamReview: { field: null, direction: null },
+      mentioned: { field: null, direction: null }
+    });
+  };
+
+  const handleRefresh = () => {
+    fetchPRs();
+  };
+
   const renderPRTable = (prs, section, includeTeamColumn = false, includeLastReviewColumn = false) => {
     const sortConfig = sorting[section];
     const filteredPRs = getSortedPRs(prs, sortConfig)
@@ -1246,10 +1330,6 @@ function App() {
         </Table>
       </TableContainer>
     );
-  };
-
-  const handleRefresh = () => {
-    fetchPRs();
   };
 
   const renderDismissedPRs = () => {
@@ -1381,13 +1461,18 @@ function App() {
     <Container>
       <Header>
         <h1>PR Pancakes</h1>
-        <RefreshButton
-          onClick={handleRefresh}
-          disabled={loading}
-          data-loading={loading}
-        >
-          <RefreshIcon /> {loading ? 'Refreshing...' : 'Refresh PRs'}
-        </RefreshButton>
+        <div className="header-buttons">
+          <RefreshButton
+            onClick={handleRefresh}
+            disabled={loading}
+            data-loading={loading}
+          >
+            <RefreshIcon /> {loading ? 'Refreshing...' : 'Refresh PRs'}
+          </RefreshButton>
+          <LogoutButton onClick={handleLogout}>
+            <LogoutIcon />
+          </LogoutButton>
+        </div>
       </Header>
 
       {loading ? (
