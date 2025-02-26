@@ -746,6 +746,66 @@ const SectionHeader = styled.div`
   }
 `;
 
+const PRCount = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0c46c;
+  color: #0d1117;
+  border-radius: 16px;
+  padding: 2px 10px;
+  margin-right: 12px;
+  margin-left: 0;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 28px;
+  height: 28px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+
+  /* Add subtle shine effect */
+  &::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to bottom right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(30deg);
+    transition: transform 0.5s;
+    z-index: 1;
+    opacity: 0.6;
+  }
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+
+    &::after {
+      transform: rotate(30deg) translate(50%, 50%);
+    }
+  }
+
+  /* Pulse animation when count is greater than 0 */
+  @keyframes subtle-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  &[data-has-items="true"] {
+    animation: subtle-pulse 2s infinite ease-in-out;
+  }
+`;
+
 const LoginContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -1450,7 +1510,10 @@ function App() {
         <CollapsibleHeader onClick={() => setIsDismissedSectionExpanded(!isDismissedSectionExpanded)}>
           <Caret data-expanded={isDismissedSectionExpanded.toString()}>▶</Caret>
           <SectionHeader>
-            <h2>🥞 Dismissed Pull Requests ({dismissedPRsList.length})</h2>
+            <PRCount data-has-items={dismissedPRsList.length > 0 ? "true" : "false"}>
+              {dismissedPRsList.length}
+            </PRCount>
+            <h2>Dismissed Pull Requests</h2>
             <InfoIcon onClick={(e) => e.stopPropagation()}>
               i
               <TooltipContainer>
@@ -1580,7 +1643,10 @@ function App() {
         <>
           <PRSection>
             <SectionHeader>
-              <h2>🥞 Your Pull Requests ({prs.authored.filter(pr => !isDismissed(pr)).length})</h2>
+              <PRCount data-has-items={prs.authored.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                {prs.authored.filter(pr => !isDismissed(pr)).length}
+              </PRCount>
+              <h2>Your Pull Requests</h2>
               <InfoIcon>
                 i
                 <TooltipContainer>
@@ -1593,7 +1659,10 @@ function App() {
 
           <PRSection>
             <SectionHeader>
-              <h2>🥞 Needs Your Review ({prs.directReview.filter(pr => !isDismissed(pr)).length})</h2>
+              <PRCount data-has-items={prs.directReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                {prs.directReview.filter(pr => !isDismissed(pr)).length}
+              </PRCount>
+              <h2>Needs Your Review</h2>
               <InfoIcon>
                 i
                 <TooltipContainer>
@@ -1606,7 +1675,10 @@ function App() {
 
           <PRSection>
             <SectionHeader>
-              <h2>🥞 Team Reviews ({prs.teamReview.filter(pr => !isDismissed(pr)).length})</h2>
+              <PRCount data-has-items={prs.teamReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                {prs.teamReview.filter(pr => !isDismissed(pr)).length}
+              </PRCount>
+              <h2>Team Reviews</h2>
               <InfoIcon>
                 i
                 <TooltipContainer>
@@ -1619,7 +1691,10 @@ function App() {
 
           <PRSection>
             <SectionHeader>
-              <h2>🥞 Mentioned ({prs.mentioned.filter(pr => !isDismissed(pr)).length})</h2>
+              <PRCount data-has-items={prs.mentioned.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                {prs.mentioned.filter(pr => !isDismissed(pr)).length}
+              </PRCount>
+              <h2>Mentioned</h2>
               <InfoIcon>
                 i
                 <TooltipContainer>
