@@ -862,7 +862,16 @@ function App() {
   });
   const [dismissedPRs, setDismissedPRs] = useState({});
   const [openDismissDropdown, setOpenDismissDropdown] = useState(null);
-  const [isDismissedSectionExpanded, setIsDismissedSectionExpanded] = useState(false);
+  const [isDismissedSectionExpanded, setIsDismissedSectionExpanded] = useState(
+    JSON.parse(localStorage.getItem('sectionExpanded_dismissed') || 'false')
+  );
+  const [expandedSections, setExpandedSections] = useState({
+    authored: JSON.parse(localStorage.getItem('sectionExpanded_authored') || 'true'),
+    directReview: JSON.parse(localStorage.getItem('sectionExpanded_directReview') || 'true'),
+    teamReview: JSON.parse(localStorage.getItem('sectionExpanded_teamReview') || 'true'),
+    mentioned: JSON.parse(localStorage.getItem('sectionExpanded_mentioned') || 'true'),
+    alreadyReviewed: JSON.parse(localStorage.getItem('sectionExpanded_alreadyReviewed') || 'true')
+  });
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [activeButtonId, setActiveButtonId] = useState(null);
 
@@ -887,6 +896,18 @@ function App() {
   useEffect(() => {
     localStorage.setItem('dismissedPRs', JSON.stringify(dismissedPRs));
   }, [dismissedPRs]);
+
+  // Save expanded sections state to localStorage
+  useEffect(() => {
+    Object.keys(expandedSections).forEach(section => {
+      localStorage.setItem(`sectionExpanded_${section}`, JSON.stringify(expandedSections[section]));
+    });
+  }, [expandedSections]);
+
+  // Save dismissed section expanded state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sectionExpanded_dismissed', JSON.stringify(isDismissedSectionExpanded));
+  }, [isDismissedSectionExpanded]);
 
   // Add click outside handler
   useEffect(() => {
@@ -1419,6 +1440,23 @@ function App() {
     fetchPRs();
   };
 
+  const toggleSectionExpanded = (section) => {
+    if (section === 'dismissed') {
+      const newState = !isDismissedSectionExpanded;
+      setIsDismissedSectionExpanded(newState);
+      localStorage.setItem('sectionExpanded_dismissed', JSON.stringify(newState));
+    } else {
+      setExpandedSections(prev => {
+        const newState = {
+          ...prev,
+          [section]: !prev[section]
+        };
+        localStorage.setItem(`sectionExpanded_${section}`, JSON.stringify(newState[section]));
+        return newState;
+      });
+    }
+  };
+
   const renderPRTable = (prs, section, includeTeamColumn = false, includeLastReviewColumn = false) => {
     const sortConfig = sorting[section];
     const filteredPRs = getSortedPRs(prs, sortConfig)
@@ -1576,7 +1614,7 @@ function App() {
 
     return (
       <PRSection>
-        <CollapsibleHeader onClick={() => setIsDismissedSectionExpanded(!isDismissedSectionExpanded)}>
+        <CollapsibleHeader onClick={() => toggleSectionExpanded('dismissed')}>
           <Caret data-expanded={isDismissedSectionExpanded.toString()}>▶</Caret>
           <SectionHeader>
             <PRCount data-has-items={dismissedPRsList.length > 0 ? "true" : "false"}>
@@ -1712,83 +1750,108 @@ function App() {
       ) : (
         <>
           <PRSection>
-            <SectionHeader>
-              <PRCount data-has-items={prs.authored.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                {prs.authored.filter(pr => !isDismissed(pr)).length}
-              </PRCount>
-              <h2>Your Pull Requests</h2>
-              <InfoIcon>
-                i
-                <TooltipContainer>
-                  Pull requests that you have opened and are still open.
-                </TooltipContainer>
-              </InfoIcon>
-            </SectionHeader>
-            {renderPRTable(prs.authored, 'authored')}
+            <CollapsibleHeader onClick={() => toggleSectionExpanded('authored')}>
+              <Caret data-expanded={expandedSections.authored.toString()}>▶</Caret>
+              <SectionHeader>
+                <PRCount data-has-items={prs.authored.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                  {prs.authored.filter(pr => !isDismissed(pr)).length}
+                </PRCount>
+                <h2>Your Pull Requests</h2>
+                <InfoIcon onClick={(e) => e.stopPropagation()}>
+                  i
+                  <TooltipContainer>
+                    Pull requests that you have opened and are still open.
+                  </TooltipContainer>
+                </InfoIcon>
+              </SectionHeader>
+            </CollapsibleHeader>
+            <CollapsibleContent data-expanded={expandedSections.authored.toString()}>
+              {renderPRTable(prs.authored, 'authored')}
+            </CollapsibleContent>
           </PRSection>
 
           <PRSection>
-            <SectionHeader>
-              <PRCount data-has-items={prs.directReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                {prs.directReview.filter(pr => !isDismissed(pr)).length}
-              </PRCount>
-              <h2>Needs Your Review</h2>
-              <InfoIcon>
-                i
-                <TooltipContainer>
-                  Open pull requests where you have been directly requested as a reviewer.
-                </TooltipContainer>
-              </InfoIcon>
-            </SectionHeader>
-            {renderPRTable(prs.directReview, 'directReview', false, true)}
+            <CollapsibleHeader onClick={() => toggleSectionExpanded('directReview')}>
+              <Caret data-expanded={expandedSections.directReview.toString()}>▶</Caret>
+              <SectionHeader>
+                <PRCount data-has-items={prs.directReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                  {prs.directReview.filter(pr => !isDismissed(pr)).length}
+                </PRCount>
+                <h2>Needs Your Review</h2>
+                <InfoIcon onClick={(e) => e.stopPropagation()}>
+                  i
+                  <TooltipContainer>
+                    Open pull requests where you have been directly requested as a reviewer.
+                  </TooltipContainer>
+                </InfoIcon>
+              </SectionHeader>
+            </CollapsibleHeader>
+            <CollapsibleContent data-expanded={expandedSections.directReview.toString()}>
+              {renderPRTable(prs.directReview, 'directReview', false, true)}
+            </CollapsibleContent>
           </PRSection>
 
           <PRSection>
-            <SectionHeader>
-              <PRCount data-has-items={prs.teamReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                {prs.teamReview.filter(pr => !isDismissed(pr)).length}
-              </PRCount>
-              <h2>Team Reviews</h2>
-              <InfoIcon>
-                i
-                <TooltipContainer>
-                  Open pull requests where one of your teams has been requested to review.
-                </TooltipContainer>
-              </InfoIcon>
-            </SectionHeader>
-            {renderPRTable(prs.teamReview, 'teamReview', true, true)}
+            <CollapsibleHeader onClick={() => toggleSectionExpanded('teamReview')}>
+              <Caret data-expanded={expandedSections.teamReview.toString()}>▶</Caret>
+              <SectionHeader>
+                <PRCount data-has-items={prs.teamReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                  {prs.teamReview.filter(pr => !isDismissed(pr)).length}
+                </PRCount>
+                <h2>Team Reviews</h2>
+                <InfoIcon onClick={(e) => e.stopPropagation()}>
+                  i
+                  <TooltipContainer>
+                    Open pull requests where one of your teams has been requested to review.
+                  </TooltipContainer>
+                </InfoIcon>
+              </SectionHeader>
+            </CollapsibleHeader>
+            <CollapsibleContent data-expanded={expandedSections.teamReview.toString()}>
+              {renderPRTable(prs.teamReview, 'teamReview', true, true)}
+            </CollapsibleContent>
           </PRSection>
 
           <PRSection>
-            <SectionHeader>
-              <PRCount data-has-items={prs.mentioned.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                {prs.mentioned.filter(pr => !isDismissed(pr)).length}
-              </PRCount>
-              <h2>Mentioned</h2>
-              <InfoIcon>
-                i
-                <TooltipContainer>
-                  Open pull requests where you have been mentioned in the description or comments.
-                </TooltipContainer>
-              </InfoIcon>
-            </SectionHeader>
-            {renderPRTable(prs.mentioned, 'mentioned')}
+            <CollapsibleHeader onClick={() => toggleSectionExpanded('mentioned')}>
+              <Caret data-expanded={expandedSections.mentioned.toString()}>▶</Caret>
+              <SectionHeader>
+                <PRCount data-has-items={prs.mentioned.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                  {prs.mentioned.filter(pr => !isDismissed(pr)).length}
+                </PRCount>
+                <h2>Mentioned</h2>
+                <InfoIcon onClick={(e) => e.stopPropagation()}>
+                  i
+                  <TooltipContainer>
+                    Open pull requests where you have been mentioned in the description or comments.
+                  </TooltipContainer>
+                </InfoIcon>
+              </SectionHeader>
+            </CollapsibleHeader>
+            <CollapsibleContent data-expanded={expandedSections.mentioned.toString()}>
+              {renderPRTable(prs.mentioned, 'mentioned')}
+            </CollapsibleContent>
           </PRSection>
 
           <PRSection>
-            <SectionHeader>
-              <PRCount data-has-items={prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                {prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length}
-              </PRCount>
-              <h2>Already Reviewed</h2>
-              <InfoIcon>
-                i
-                <TooltipContainer>
-                  Pull requests that you've already reviewed but are still open.
-                </TooltipContainer>
-              </InfoIcon>
-            </SectionHeader>
-            {renderPRTable(prs.alreadyReviewed, 'alreadyReviewed', false, true)}
+            <CollapsibleHeader onClick={() => toggleSectionExpanded('alreadyReviewed')}>
+              <Caret data-expanded={expandedSections.alreadyReviewed.toString()}>▶</Caret>
+              <SectionHeader>
+                <PRCount data-has-items={prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                  {prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length}
+                </PRCount>
+                <h2>Already Reviewed</h2>
+                <InfoIcon onClick={(e) => e.stopPropagation()}>
+                  i
+                  <TooltipContainer>
+                    Pull requests that you've already reviewed but are still open.
+                  </TooltipContainer>
+                </InfoIcon>
+              </SectionHeader>
+            </CollapsibleHeader>
+            <CollapsibleContent data-expanded={expandedSections.alreadyReviewed.toString()}>
+              {renderPRTable(prs.alreadyReviewed, 'alreadyReviewed', false, true)}
+            </CollapsibleContent>
           </PRSection>
 
           {renderDismissedPRs()}
