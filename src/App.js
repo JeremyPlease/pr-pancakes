@@ -849,14 +849,16 @@ function App() {
     authored: [],
     directReview: [],
     teamReview: [],
-    mentioned: []
+    mentioned: [],
+    alreadyReviewed: []
   });
   const [loading, setLoading] = useState(false);
   const [sorting, setSorting] = useState({
     authored: { field: null, direction: null },
     directReview: { field: null, direction: null },
     teamReview: { field: null, direction: null },
-    mentioned: { field: null, direction: null }
+    mentioned: { field: null, direction: null },
+    alreadyReviewed: { field: null, direction: null }
   });
   const [dismissedPRs, setDismissedPRs] = useState({});
   const [openDismissDropdown, setOpenDismissDropdown] = useState(null);
@@ -1082,6 +1084,44 @@ function App() {
               }
             }
           }
+          alreadyReviewedPRs: search(query: "is:pr is:open -author:@me -review-requested:@me reviewed-by:@me archived:false", type: ISSUE, first: 100) {
+            nodes {
+              ... on PullRequest {
+                id
+                title
+                number
+                url
+                repository {
+                  name
+                  owner {
+                    login
+                  }
+                }
+                author {
+                  login
+                }
+                createdAt
+                updatedAt
+                comments {
+                  totalCount
+                }
+                reviews(first: 10) {
+                  nodes {
+                    author {
+                      login
+                    }
+                    submittedAt
+                    state
+                  }
+                }
+                reviewThreads(first: 100) {
+                  nodes {
+                    isResolved
+                  }
+                }
+              }
+            }
+          }
         }
       `;
 
@@ -1153,11 +1193,38 @@ function App() {
         !allReviewPRs.some(reviewed => reviewed.id === pr.id)
       );
 
+      const processAlreadyReviewedPRs = (prs) => {
+        return prs.map(pr => {
+          const userReview = pr.reviews.nodes
+            .filter(review => review.author.login === result.viewer.login)
+            .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
+
+          const lastReview = userReview
+            ? `${formatDistanceToNow(new Date(userReview.submittedAt))} ago (${userReview.state.toLowerCase()})`
+            : 'Never';
+
+          return {
+            ...pr,
+            lastReview,
+            lastReviewDate: userReview ? userReview.submittedAt : null,
+            unresolvedThreads: pr.reviewThreads.nodes.filter(thread => !thread.isResolved).length,
+            totalComments: (pr.comments?.totalCount || 0) + (pr.reviews?.totalCount || 0)
+          };
+        });
+      };
+
+      const alreadyReviewedPRs = processAlreadyReviewedPRs(result.alreadyReviewedPRs.nodes).filter(pr =>
+        !authoredPRs.some(authored => authored.id === pr.id) &&
+        !allReviewPRs.some(reviewed => reviewed.id === pr.id) &&
+        !mentionedPRs.some(mentioned => mentioned.id === pr.id)
+      );
+
       setPRs({
         authored: authoredPRs,
         directReview: processPRs(directReview),
         teamReview: processPRs(teamReview),
-        mentioned: mentionedPRs
+        mentioned: mentionedPRs,
+        alreadyReviewed: alreadyReviewedPRs
       });
     } catch (error) {
       console.error('Error fetching PRs:', error);
@@ -1336,13 +1403,15 @@ function App() {
       authored: [],
       directReview: [],
       teamReview: [],
-      mentioned: []
+      mentioned: [],
+      alreadyReviewed: []
     });
     setSorting({
       authored: { field: null, direction: null },
       directReview: { field: null, direction: null },
       teamReview: { field: null, direction: null },
-      mentioned: { field: null, direction: null }
+      mentioned: { field: null, direction: null },
+      alreadyReviewed: { field: null, direction: null }
     });
   };
 
@@ -1584,7 +1653,8 @@ function App() {
       ...(Array.isArray(prs.authored) ? prs.authored : []),
       ...(Array.isArray(prs.directReview) ? prs.directReview : []),
       ...(Array.isArray(prs.teamReview) ? prs.teamReview : []),
-      ...(Array.isArray(prs.mentioned) ? prs.mentioned : [])
+      ...(Array.isArray(prs.mentioned) ? prs.mentioned : []),
+      ...(Array.isArray(prs.alreadyReviewed) ? prs.alreadyReviewed : [])
     ];
 
     // Use a type-safe approach to find the PR
@@ -1703,6 +1773,22 @@ function App() {
               </InfoIcon>
             </SectionHeader>
             {renderPRTable(prs.mentioned, 'mentioned')}
+          </PRSection>
+
+          <PRSection>
+            <SectionHeader>
+              <PRCount data-has-items={prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                {prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length}
+              </PRCount>
+              <h2>Already Reviewed</h2>
+              <InfoIcon>
+                i
+                <TooltipContainer>
+                  Pull requests that you've already reviewed but are still open.
+                </TooltipContainer>
+              </InfoIcon>
+            </SectionHeader>
+            {renderPRTable(prs.alreadyReviewed, 'alreadyReviewed', false, true)}
           </PRSection>
 
           {renderDismissedPRs()}
