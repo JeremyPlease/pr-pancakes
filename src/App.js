@@ -247,6 +247,7 @@ const LoadingSpinner = styled.div`
 `;
 
 const LoadingOverlay = styled.div`
+  max-width: 1200px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -256,7 +257,7 @@ const LoadingOverlay = styled.div`
   gap: 16px;
   background-color: #161b22;
   border-radius: 10px;
-  margin: 24px 0;
+  margin: 24px auto;
 `;
 
 const Header = styled.div`
@@ -670,6 +671,78 @@ const Footer = styled.footer`
     &:hover {
       text-decoration: underline;
     }
+  }
+`;
+
+const InfoIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #30363d;
+  color: #c9d1d9;
+  font-size: 12px;
+  margin-left: 8px;
+  cursor: help;
+  position: relative;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: #f0c46c;
+    color: #0d1117;
+  }
+`;
+
+const TooltipContainer = styled.div`
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  background-color: #f0c46c;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: #1c2128;
+  font-size: 13px;
+  font-weight: normal;
+  white-space: nowrap;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  width: max-content;
+  max-width: 300px;
+  text-align: left;
+  text-wrap: auto;
+  line-height: 1.5;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: #1c2128 transparent transparent transparent;
+  }
+
+  ${InfoIcon}:hover & {
+    opacity: 1;
+    visibility: visible;
+  }
+`;
+
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+
+  h2 {
+    margin: 0;
   }
 `;
 
@@ -1376,7 +1449,15 @@ function App() {
       <PRSection>
         <CollapsibleHeader onClick={() => setIsDismissedSectionExpanded(!isDismissedSectionExpanded)}>
           <Caret data-expanded={isDismissedSectionExpanded.toString()}>▶</Caret>
-          <h2>🥞 Dismissed Pull Requests ({dismissedPRsList.length})</h2>
+          <SectionHeader>
+            <h2>🥞 Dismissed Pull Requests ({dismissedPRsList.length})</h2>
+            <InfoIcon onClick={(e) => e.stopPropagation()}>
+              i
+              <TooltipContainer>
+                Pull requests you've dismissed from the other sections.
+              </TooltipContainer>
+            </InfoIcon>
+          </SectionHeader>
         </CollapsibleHeader>
         <CollapsibleContent data-expanded={isDismissedSectionExpanded.toString()}>
           {dismissedPRsList.length === 0 ? (
@@ -1498,22 +1579,54 @@ function App() {
       ) : (
         <>
           <PRSection>
-            <h2>🥞 Your Pull Requests ({prs.authored.filter(pr => !isDismissed(pr)).length})</h2>
+            <SectionHeader>
+              <h2>🥞 Your Pull Requests ({prs.authored.filter(pr => !isDismissed(pr)).length})</h2>
+              <InfoIcon>
+                i
+                <TooltipContainer>
+                  Pull requests that you have opened and are still open.
+                </TooltipContainer>
+              </InfoIcon>
+            </SectionHeader>
             {renderPRTable(prs.authored, 'authored')}
           </PRSection>
 
           <PRSection>
-            <h2>🥞 Needs Your Review ({prs.directReview.filter(pr => !isDismissed(pr)).length})</h2>
+            <SectionHeader>
+              <h2>🥞 Needs Your Review ({prs.directReview.filter(pr => !isDismissed(pr)).length})</h2>
+              <InfoIcon>
+                i
+                <TooltipContainer>
+                  Open pull requests where you have been directly requested as a reviewer.
+                </TooltipContainer>
+              </InfoIcon>
+            </SectionHeader>
             {renderPRTable(prs.directReview, 'directReview', false, true)}
           </PRSection>
 
           <PRSection>
-            <h2>🥞 Team Reviews ({prs.teamReview.filter(pr => !isDismissed(pr)).length})</h2>
+            <SectionHeader>
+              <h2>🥞 Team Reviews ({prs.teamReview.filter(pr => !isDismissed(pr)).length})</h2>
+              <InfoIcon>
+                i
+                <TooltipContainer>
+                  Open pull requests where one of your teams has been requested to review.
+                </TooltipContainer>
+              </InfoIcon>
+            </SectionHeader>
             {renderPRTable(prs.teamReview, 'teamReview', true, true)}
           </PRSection>
 
           <PRSection>
-            <h2>🥞 Mentioned ({prs.mentioned.filter(pr => !isDismissed(pr)).length})</h2>
+            <SectionHeader>
+              <h2>🥞 Mentioned ({prs.mentioned.filter(pr => !isDismissed(pr)).length})</h2>
+              <InfoIcon>
+                i
+                <TooltipContainer>
+                  Open pull requests where you have been mentioned in the description or comments.
+                </TooltipContainer>
+              </InfoIcon>
+            </SectionHeader>
             {renderPRTable(prs.mentioned, 'mentioned')}
           </PRSection>
 
