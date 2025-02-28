@@ -843,6 +843,39 @@ const DropdownPortal = ({ children, isOpen }) => {
   );
 };
 
+// Add this styled component after the other styled components
+const BackgroundRefreshPill = styled.div`
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(13, 17, 23, 0.9);
+  border: 1px solid #f0c46c;
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  padding: 8px 20px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #f0c46c;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  animation: slideDown 0.3s ease;
+
+  @keyframes slideDown {
+    from {
+      transform: translate(-50%, -100%);
+    }
+    to {
+      transform: translate(-50%, 0);
+    }
+  }
+`;
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem('github_token'));
   const [prs, setPRs] = useState({
@@ -853,6 +886,7 @@ function App() {
     alreadyReviewed: []
   });
   const [loading, setLoading] = useState(false);
+  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
   const [sorting, setSorting] = useState({
     authored: { field: null, direction: null },
     directReview: { field: null, direction: null },
@@ -894,7 +928,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('dismissedPRs', JSON.stringify(dismissedPRs));
+    // Only save to localStorage if dismissedPRs is not empty or if it has been explicitly modified
+    if (Object.keys(dismissedPRs).length > 0) {
+      localStorage.setItem('dismissedPRs', JSON.stringify(dismissedPRs));
+    }
   }, [dismissedPRs]);
 
   // Save expanded sections state to localStorage
@@ -967,8 +1004,14 @@ function App() {
     };
   }, [openDismissDropdown]);
 
-  const fetchPRs = useCallback(async () => {
-    setLoading(true);
+  const fetchPRs = useCallback(async (isBackgroundRefresh = false) => {
+    // If this is a background refresh, set backgroundRefreshing instead of loading
+    if (isBackgroundRefresh) {
+      setBackgroundRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     const graphqlWithAuth = graphql.defaults({
       headers: {
         authorization: `token ${token}`,
@@ -1251,6 +1294,7 @@ function App() {
       console.error('Error fetching PRs:', error);
     } finally {
       setLoading(false);
+      setBackgroundRefreshing(false);
     }
   }, [token]);
 
@@ -1258,6 +1302,20 @@ function App() {
     if (token) {
       fetchPRs();
     }
+  }, [token, fetchPRs]);
+
+  // Add window focus event listener to refresh PRs when returning to the page
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (token) {
+        fetchPRs(true); // Pass true to indicate this is a background refresh
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, [token, fetchPRs]);
 
   const handleLogin = () => {
@@ -1381,10 +1439,27 @@ function App() {
         return;
     }
 
+    // Extract only the necessary PR information to avoid circular references
+    const simplifiedPR = {
+      id: pr.id,
+      title: pr.title,
+      number: pr.number,
+      url: pr.url,
+      repository: {
+        name: pr.repository.name,
+        owner: {
+          login: pr.repository.owner.login
+        }
+      },
+      author: {
+        login: pr.author.login
+      }
+    };
+
     setDismissedPRs(prev => ({
       ...prev,
       [pr.id]: {
-        pr,
+        pr: simplifiedPR,
         dismissedAt: now.toISOString(),
         dismissedUntil: until,
         lastUpdateTime: pr.updatedAt
@@ -1405,7 +1480,7 @@ function App() {
 
   const isDismissed = (pr) => {
     const dismissal = dismissedPRs[pr.id];
-    if (!dismissal) return false;
+    if (!dismissal || !dismissal.pr) return false;
 
     if (dismissal.dismissedUntil === 'forever') return true;
     if (dismissal.dismissedUntil === 'until-update' && pr.updatedAt === dismissal.lastUpdateTime) return true;
@@ -1437,7 +1512,15 @@ function App() {
   };
 
   const handleRefresh = () => {
-    fetchPRs();
+    // Check if there are already PRs loaded
+    const hasPRs = Object.values(prs).some(section => section.length > 0);
+
+    // If PRs are already loaded, use background refreshing
+    if (hasPRs) {
+      fetchPRs(true); // Pass true to indicate this is a background refresh
+    } else {
+      fetchPRs(false); // Use full loading indicator if no PRs are loaded
+    }
   };
 
   const toggleSectionExpanded = (section) => {
@@ -1590,6 +1673,7 @@ function App() {
   const renderDismissedPRs = () => {
     const dismissedPRsList = Object.values(dismissedPRs)
       .filter(({ dismissedUntil, pr }) => {
+        if (!pr) return false; // Skip entries with missing PR data
         if (dismissedUntil === 'forever' || dismissedUntil === 'until-update') return true;
         const untilDate = new Date(dismissedUntil);
         const now = new Date();
@@ -1731,16 +1815,23 @@ function App() {
         <div className="header-buttons">
           <RefreshButton
             onClick={handleRefresh}
-            disabled={loading}
-            data-loading={loading}
+            disabled={loading || backgroundRefreshing}
+            data-loading={loading || backgroundRefreshing}
           >
-            <RefreshIcon /> {loading ? 'Refreshing...' : 'Refresh PRs'}
+            <RefreshIcon /> {loading ? 'Refreshing...' : backgroundRefreshing ? 'Refreshing...' : 'Refresh PRs'}
           </RefreshButton>
           <LogoutButton onClick={handleLogout}>
             <LogoutIcon />
           </LogoutButton>
         </div>
       </Header>
+
+      {backgroundRefreshing && (
+        <BackgroundRefreshPill>
+          <LoadingSpinner style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+          Refreshing PRs...
+        </BackgroundRefreshPill>
+      )}
 
       {loading ? (
         <LoadingOverlay>
