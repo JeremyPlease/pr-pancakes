@@ -1004,6 +1004,14 @@ function App() {
     };
   }, [openDismissDropdown]);
 
+  // Function to handle token expiration
+  const handleTokenExpiration = useCallback(() => {
+    console.log('Authentication token expired or invalid. Redirecting to auth...');
+    localStorage.removeItem('github_token');
+    setToken(null);
+    window.location.href = '/auth';
+  }, []);
+
   const fetchPRs = useCallback(async (isBackgroundRefresh = false) => {
     // If this is a background refresh, set backgroundRefreshing instead of loading
     if (isBackgroundRefresh) {
@@ -1191,33 +1199,41 @@ function App() {
 
       const result = await graphqlWithAuth(query).catch(e => {
         console.error('GraphQL error:', e);
+        // Check if the error is a 401 unauthorized error
+        if (e.status === 401 || (e.errors && e.errors.some(err => err.type === 'UNAUTHORIZED'))) {
+          handleTokenExpiration();
+          return null;
+        }
         return e.data;
       });
 
-      const userTeams = result.viewer.organizations.nodes
+      // If result is null (due to auth error), exit early
+      if (result === null) return;
+
+      const userTeams = result.viewer?.organizations?.nodes
         .filter(org => org?.teams)
-        .flatMap(org => org?.teams?.nodes?.map(team => team.name));
+        .flatMap(org => org?.teams?.nodes?.map(team => team.name)) || [];
 
       const processPRs = (prs) => {
         return prs.map(pr => ({
           ...pr,
-          unresolvedThreads: pr.reviewThreads.nodes.filter(thread => !thread.isResolved).length,
+          unresolvedThreads: pr.reviewThreads?.nodes?.filter(thread => !thread.isResolved)?.length || 0,
           totalComments: (pr.comments?.totalCount || 0) + (pr.reviews?.totalCount || 0)
         }));
       };
 
       const processReviewPRs = (prs) => {
-        const directReview = [];
-        const teamReview = [];
+        const directReviewPRs = [];
+        const teamReviewPRs = [];
 
-        prs.nodes.forEach(pr => {
-          const teamNames = pr.reviewRequests.nodes
-            .map(request => request.requestedReviewer?.name)
-            .filter(name => name);
+        prs.nodes?.forEach(pr => {
+          const teamNames = pr.reviewRequests?.nodes
+            ?.map(request => request.requestedReviewer?.name)
+            ?.filter(name => name) || [];
 
-          const userReview = pr.reviews.nodes
-            .filter(review => review.author.login === result.viewer.login)
-            .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
+          const userReview = pr.reviews?.nodes
+            ?.filter(review => review.author?.login === result.viewer?.login)
+            ?.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
 
           const lastReview = userReview
             ? `${formatDistanceToNow(new Date(userReview.submittedAt))} ago (${userReview.state.toLowerCase()})`
@@ -1231,36 +1247,36 @@ function App() {
           };
 
           // Check if user is directly requested for review
-          const isDirectlyRequested = pr.reviewRequests.nodes
-            .some(request => request.requestedReviewer?.login === result.viewer.login);
+          const isDirectlyRequested = pr.reviewRequests?.nodes
+            ?.some(request => request.requestedReviewer?.login === result.viewer?.login) || false;
 
           // Check if user's team is requested for review
           const isTeamRequested = teamNames.some(team => userTeams.includes(team));
 
           if (isDirectlyRequested) {
-            directReview.push(prWithReview);
+            directReviewPRs.push(prWithReview);
           } else if (isTeamRequested) {
-            teamReview.push(prWithReview);
+            teamReviewPRs.push(prWithReview);
           }
         });
 
-        return { directReview, teamReview };
+        return { directReview: directReviewPRs, teamReview: teamReviewPRs };
       };
 
-      const { directReview, teamReview } = processReviewPRs(result.reviewRequestedPRs);
+      const { directReview, teamReview } = processReviewPRs(result.reviewRequestedPRs || { nodes: [] });
 
-      const authoredPRs = processPRs(result.authoredPRs.nodes);
+      const authoredPRs = processPRs(result.authoredPRs?.nodes || []);
       const allReviewPRs = [...directReview, ...teamReview];
 
-      const mentionedPRs = processPRs(result.mentionedPRs.nodes).filter(pr =>
+      const mentionedPRs = processPRs(result.mentionedPRs?.nodes || []).filter(pr =>
         !authoredPRs.some(authored => authored.id === pr.id) &&
         !allReviewPRs.some(reviewed => reviewed.id === pr.id)
       );
 
       const processAlreadyReviewedPRs = (prs) => {
         return prs.map(pr => {
-          const userReview = pr.reviews.nodes
-            .filter(review => review.author.login === result.viewer.login)
+          const userReview = pr.reviews?.nodes
+            .filter(review => review.author?.login === result.viewer?.login)
             .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
 
           const lastReview = userReview
@@ -1271,13 +1287,13 @@ function App() {
             ...pr,
             lastReview,
             lastReviewDate: userReview ? userReview.submittedAt : null,
-            unresolvedThreads: pr.reviewThreads.nodes.filter(thread => !thread.isResolved).length,
+            unresolvedThreads: pr.reviewThreads?.nodes.filter(thread => !thread.isResolved).length || 0,
             totalComments: (pr.comments?.totalCount || 0) + (pr.reviews?.totalCount || 0)
           };
         });
       };
 
-      const alreadyReviewedPRs = processAlreadyReviewedPRs(result.alreadyReviewedPRs.nodes).filter(pr =>
+      const alreadyReviewedPRs = processAlreadyReviewedPRs(result.alreadyReviewedPRs?.nodes || []).filter(pr =>
         !authoredPRs.some(authored => authored.id === pr.id) &&
         !allReviewPRs.some(reviewed => reviewed.id === pr.id) &&
         !mentionedPRs.some(mentioned => mentioned.id === pr.id)
@@ -1292,11 +1308,17 @@ function App() {
       });
     } catch (error) {
       console.error('Error fetching PRs:', error);
+      // Check if the error is a 401 unauthorized error
+      if (error.status === 401 ||
+          (error.errors && error.errors.some(err => err.type === 'UNAUTHORIZED')) ||
+          (error.message && error.message.includes('401'))) {
+        handleTokenExpiration();
+      }
     } finally {
       setLoading(false);
       setBackgroundRefreshing(false);
     }
-  }, [token]);
+  }, [token, handleTokenExpiration]);
 
   useEffect(() => {
     if (token) {
@@ -1319,6 +1341,8 @@ function App() {
   }, [token, fetchPRs]);
 
   const handleLogin = () => {
+    // Clear any existing token before redirecting
+    localStorage.removeItem('github_token');
     window.location.href = 'https://prpancakes.com/auth';
   };
 
