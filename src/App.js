@@ -1060,8 +1060,14 @@ function App() {
                 }
                 createdAt
                 updatedAt
-                comments {
+                comments(first: 100) {
                   totalCount
+                  nodes {
+                    author {
+                      login
+                      __typename
+                    }
+                  }
                 }
                 reviewRequests {
                   totalCount
@@ -1111,8 +1117,14 @@ function App() {
                 }
                 createdAt
                 updatedAt
-                comments {
+                comments(first: 100) {
                   totalCount
+                  nodes {
+                    author {
+                      login
+                      __typename
+                    }
+                  }
                 }
                 reviews(first: 10) {
                   nodes {
@@ -1161,8 +1173,14 @@ function App() {
                 }
                 createdAt
                 updatedAt
-                comments {
+                comments(first: 100) {
                   totalCount
+                  nodes {
+                    author {
+                      login
+                      __typename
+                    }
+                  }
                 }
                 reviews {
                   totalCount
@@ -1193,8 +1211,14 @@ function App() {
                 }
                 createdAt
                 updatedAt
-                comments {
+                comments(first: 100) {
                   totalCount
+                  nodes {
+                    author {
+                      login
+                      __typename
+                    }
+                  }
                 }
                 reviews(first: 10) {
                   nodes {
@@ -1274,7 +1298,10 @@ function App() {
             reviewCounts,
             totalNonPendingReviews,
             unresolvedThreads: pr.reviewThreads?.nodes?.filter(thread => !thread.isResolved)?.length || 0,
-            totalComments: (pr.comments?.totalCount || 0) + (pr.reviews?.totalCount || 0)
+            totalComments: ((pr.comments?.nodes?.filter(comment =>
+              comment?.author?.login &&
+              comment.author.__typename !== 'Bot'
+            )?.length || 0) + (pr.reviews?.totalCount || 0))
           };
         });
       };
@@ -1345,7 +1372,10 @@ function App() {
             lastReview,
             lastReviewDate: userReview ? userReview.submittedAt : null,
             unresolvedThreads: pr.reviewThreads?.nodes.filter(thread => !thread.isResolved).length || 0,
-            totalComments: (pr.comments?.totalCount || 0) + (pr.reviews?.totalCount || 0)
+            totalComments: ((pr.comments?.nodes?.filter(comment =>
+              comment?.author?.login &&
+              comment.author.__typename !== 'Bot'
+            )?.length || 0) + (pr.reviews?.totalCount || 0))
           };
         });
       };
