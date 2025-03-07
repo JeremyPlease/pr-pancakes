@@ -1063,8 +1063,27 @@ function App() {
                 comments {
                   totalCount
                 }
-                reviews {
+                reviewRequests {
                   totalCount
+                }
+                reviews(first: 100) {
+                  totalCount
+                  nodes {
+                    state
+                    author {
+                      login
+                    }
+                    submittedAt
+                    url
+                    comments(first: 2) {
+                      totalCount
+                      nodes {
+                        replyTo {
+                          id
+                        }
+                      }
+                    }
+                  }
                 }
                 reviewThreads(first: 100) {
                   nodes {
@@ -1215,11 +1234,49 @@ function App() {
         .flatMap(org => org?.teams?.nodes?.map(team => team.name)) || [];
 
       const processPRs = (prs) => {
-        return prs.map(pr => ({
-          ...pr,
-          unresolvedThreads: pr.reviewThreads?.nodes?.filter(thread => !thread.isResolved)?.length || 0,
-          totalComments: (pr.comments?.totalCount || 0) + (pr.reviews?.totalCount || 0)
-        }));
+        return prs.map(pr => {
+          // Get the latest review from each reviewer, filtering out comment-only reviews that are just thread responses
+          const latestReviewsByAuthor = pr.reviews?.nodes?.reduce((acc, review) => {
+            const authorLogin = review.author?.login;
+            if (!authorLogin) return acc;
+
+            // Skip COMMENTED reviews that are just replies
+            if (review.state === 'COMMENTED' &&
+                review.comments?.totalCount === 1 &&
+                review.comments?.nodes?.[0]?.replyTo) {
+              return acc;
+            }
+
+            const existingReview = acc[authorLogin];
+            if (!existingReview || new Date(review.submittedAt) > new Date(existingReview.submittedAt)) {
+              acc[authorLogin] = review;
+            }
+            return acc;
+          }, {}) || {};
+
+          // Count the latest review states
+          const reviewStates = Object.values(latestReviewsByAuthor).reduce((acc, review) => {
+            acc[review.state] = (acc[review.state] || 0) + 1;
+            return acc;
+          }, {});
+
+          const reviewCounts = {
+            approved: reviewStates.APPROVED || 0,
+            commented: reviewStates.COMMENTED || 0,
+            changes: reviewStates.CHANGES_REQUESTED || 0,
+            pending: pr.reviewRequests?.totalCount || 0
+          };
+
+          const totalNonPendingReviews = reviewCounts.approved + reviewCounts.commented + reviewCounts.changes;
+
+          return {
+            ...pr,
+            reviewCounts,
+            totalNonPendingReviews,
+            unresolvedThreads: pr.reviewThreads?.nodes?.filter(thread => !thread.isResolved)?.length || 0,
+            totalComments: (pr.comments?.totalCount || 0) + (pr.reviews?.totalCount || 0)
+          };
+        });
       };
 
       const processReviewPRs = (prs) => {
@@ -1384,6 +1441,10 @@ function App() {
         case 'lastReview':
           aValue = a.lastReviewDate ? new Date(a.lastReviewDate) : new Date(0);
           bValue = b.lastReviewDate ? new Date(b.lastReviewDate) : new Date(0);
+          break;
+        case 'reviews':
+          aValue = a.totalNonPendingReviews;
+          bValue = b.totalNonPendingReviews;
           break;
         default:
           return 0;
@@ -1625,6 +1686,14 @@ function App() {
               >
                 Last Updated
               </SortableHeader>
+              {section === 'authored' && (
+                <SortableHeader
+                  onClick={() => handleSort(section, 'reviews')}
+                  data-sort-direction={sortConfig.field === 'reviews' ? sortConfig.direction : null}
+                >
+                  Reviews
+                </SortableHeader>
+              )}
               <SortableHeader
                 onClick={() => handleSort(section, 'comments')}
                 data-sort-direction={sortConfig.field === 'comments' ? sortConfig.direction : null}
@@ -1669,6 +1738,15 @@ function App() {
                 )}
                 <ClickableTd>{formatDistanceToNow(new Date(pr.createdAt))} ago</ClickableTd>
                 <ClickableTd>{formatDistanceToNow(new Date(pr.updatedAt))} ago</ClickableTd>
+                {section === 'authored' && (
+                  <ClickableTd>
+                    {pr.reviewCounts.approved > 0 && `✅ ${pr.reviewCounts.approved} `}
+                    {pr.reviewCounts.commented > 0 && `💬 ${pr.reviewCounts.commented} `}
+                    {pr.reviewCounts.changes > 0 && `❌ ${pr.reviewCounts.changes} `}
+                    {pr.reviewCounts.pending > 0 && `🟠 ${pr.reviewCounts.pending}`}
+                    {!pr.reviewCounts.approved && !pr.reviewCounts.commented && !pr.reviewCounts.changes && !pr.reviewCounts.pending && '-'}
+                  </ClickableTd>
+                )}
                 <ClickableTd>
                   <CommentCount>
                     {pr.totalComments}
