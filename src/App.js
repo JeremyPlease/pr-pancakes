@@ -896,15 +896,26 @@ function App() {
   });
   const [dismissedPRs, setDismissedPRs] = useState({});
   const [openDismissDropdown, setOpenDismissDropdown] = useState(null);
+  // Helper function to safely parse localStorage JSON
+  const safeParseJSON = (key, defaultValue) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+      console.warn(`Failed to parse localStorage item '${key}':`, error);
+      return defaultValue;
+    }
+  };
+
   const [isDismissedSectionExpanded, setIsDismissedSectionExpanded] = useState(
-    JSON.parse(localStorage.getItem('sectionExpanded_dismissed') || 'false')
+    safeParseJSON('sectionExpanded_dismissed', false)
   );
   const [expandedSections, setExpandedSections] = useState({
-    authored: JSON.parse(localStorage.getItem('sectionExpanded_authored') || 'true'),
-    directReview: JSON.parse(localStorage.getItem('sectionExpanded_directReview') || 'true'),
-    teamReview: JSON.parse(localStorage.getItem('sectionExpanded_teamReview') || 'true'),
-    mentioned: JSON.parse(localStorage.getItem('sectionExpanded_mentioned') || 'true'),
-    alreadyReviewed: JSON.parse(localStorage.getItem('sectionExpanded_alreadyReviewed') || 'true')
+    authored: safeParseJSON('sectionExpanded_authored', true),
+    directReview: safeParseJSON('sectionExpanded_directReview', true),
+    teamReview: safeParseJSON('sectionExpanded_teamReview', true),
+    mentioned: safeParseJSON('sectionExpanded_mentioned', true),
+    alreadyReviewed: safeParseJSON('sectionExpanded_alreadyReviewed', true)
   });
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [activeButtonId, setActiveButtonId] = useState(null);
@@ -921,9 +932,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const savedDismissedPRs = localStorage.getItem('dismissedPRs');
-    if (savedDismissedPRs) {
-      setDismissedPRs(JSON.parse(savedDismissedPRs));
+    const savedDismissedPRs = safeParseJSON('dismissedPRs', {});
+    if (savedDismissedPRs && Object.keys(savedDismissedPRs).length > 0) {
+      setDismissedPRs(savedDismissedPRs);
     }
   }, []);
 
@@ -967,24 +978,49 @@ function App() {
       const activeButton = document.querySelector(`.dismiss-button[data-pr-id="${openDismissDropdown}"]`);
       if (activeButton) {
         const buttonRect = activeButton.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
 
         // Find the parent table container to check for horizontal scrolling
         const tableContainer = activeButton.closest('.table-container');
         let leftOffset = buttonRect.left;
+        let topOffset = buttonRect.bottom;
 
-        // If the table is scrolled horizontally, adjust the dropdown position
-        if (tableContainer) {
-          // Ensure the dropdown doesn't go off-screen to the right
-          const viewportWidth = window.innerWidth;
-          const dropdownWidth = 200; // Approximate width of dropdown
+        // Calculate actual dropdown dimensions if possible
+        const tempDropdown = document.createElement('div');
+        tempDropdown.style.position = 'absolute';
+        tempDropdown.style.visibility = 'hidden';
+        tempDropdown.style.width = 'max-content';
+        tempDropdown.style.minWidth = '200px';
+        tempDropdown.innerHTML = `
+          <div style="padding: 6px 0; font-size: 13px;">
+            <div style="padding: 8px 16px;">Until next update</div>
+            <div style="padding: 8px 16px;">Forever</div>
+            <div style="padding: 8px 16px;">For 1 day</div>
+            <div style="padding: 8px 16px;">For 3 days</div>
+            <div style="padding: 8px 16px;">For 7 days</div>
+          </div>
+        `;
+        document.body.appendChild(tempDropdown);
+        const dropdownWidth = tempDropdown.offsetWidth;
+        const dropdownHeight = tempDropdown.offsetHeight;
+        document.body.removeChild(tempDropdown);
 
-          if (leftOffset + dropdownWidth > viewportWidth) {
-            leftOffset = Math.max(0, viewportWidth - dropdownWidth - 10);
-          }
+        // Ensure the dropdown doesn't go off-screen to the right
+        if (leftOffset + dropdownWidth > viewportWidth) {
+          leftOffset = Math.max(10, viewportWidth - dropdownWidth - 10);
         }
 
+        // Ensure the dropdown doesn't go off-screen to the bottom
+        if (topOffset + dropdownHeight > viewportHeight) {
+          topOffset = Math.max(10, buttonRect.top - dropdownHeight);
+        }
+
+        // Ensure left offset is not negative
+        leftOffset = Math.max(10, leftOffset);
+
         setDropdownPosition({
-          top: buttonRect.bottom,
+          top: topOffset,
           left: leftOffset
         });
       }
@@ -1012,7 +1048,18 @@ function App() {
     window.location.href = '/auth';
   }, []);
 
+  // Add state to track if a fetch is already in progress
+  const [fetchInProgress, setFetchInProgress] = useState(false);
+
   const fetchPRs = useCallback(async (isBackgroundRefresh = false) => {
+    // Prevent multiple simultaneous fetches
+    if (fetchInProgress) {
+      console.log('Fetch already in progress, skipping...');
+      return;
+    }
+
+    setFetchInProgress(true);
+
     // If this is a background refresh, set backgroundRefreshing instead of loading
     if (isBackgroundRefresh) {
       setBackgroundRefreshing(true);
@@ -1404,8 +1451,9 @@ function App() {
     } finally {
       setLoading(false);
       setBackgroundRefreshing(false);
+      setFetchInProgress(false);
     }
-  }, [token, handleTokenExpiration]);
+  }, [token, handleTokenExpiration, fetchInProgress]);
 
   useEffect(() => {
     if (token) {
@@ -1601,10 +1649,43 @@ function App() {
     if (dismissal.dismissedUntil === 'until-update' && pr.updatedAt === dismissal.lastUpdateTime) return true;
     if (dismissal.dismissedUntil && new Date(dismissal.dismissedUntil) > new Date()) return true;
 
-    // If we get here, the dismissal has expired
-    handleRestore(pr.id);
+    // If we get here, the dismissal has expired - mark for cleanup but don't restore immediately
+    // to avoid side effects during render
     return false;
   };
+
+  // Separate function to check and clean up expired dismissals
+  const cleanupExpiredDismissals = useCallback(() => {
+    const now = new Date();
+    const expiredIds = [];
+    
+    Object.entries(dismissedPRs).forEach(([prId, dismissal]) => {
+      if (!dismissal || !dismissal.pr) return;
+      
+      // Check if dismissal has expired
+      if (dismissal.dismissedUntil !== 'forever' && 
+          dismissal.dismissedUntil !== 'until-update' &&
+          dismissal.dismissedUntil && 
+          new Date(dismissal.dismissedUntil) <= now) {
+        expiredIds.push(prId);
+      }
+    });
+    
+    // Clean up expired dismissals
+    if (expiredIds.length > 0) {
+      setDismissedPRs(prev => {
+        const newDismissed = { ...prev };
+        expiredIds.forEach(id => delete newDismissed[id]);
+        return newDismissed;
+      });
+    }
+  }, [dismissedPRs]);
+
+  // Clean up expired dismissals periodically
+  useEffect(() => {
+    const interval = setInterval(cleanupExpiredDismissals, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [cleanupExpiredDismissals]);
 
   const handleLogout = () => {
     localStorage.removeItem('github_token');
