@@ -1048,7 +1048,17 @@ function App() {
     window.location.href = '/auth';
   }, []);
 
+  // Add state to track if a fetch is already in progress
+  const [fetchInProgress, setFetchInProgress] = useState(false);
+
   const fetchPRs = useCallback(async (isBackgroundRefresh = false) => {
+    // Prevent multiple simultaneous fetches
+    if (fetchInProgress) {
+      console.log('Fetch already in progress, skipping...');
+      return;
+    }
+
+    setFetchInProgress(true);
     // If this is a background refresh, set backgroundRefreshing instead of loading
     if (isBackgroundRefresh) {
       setBackgroundRefreshing(true);
@@ -1440,8 +1450,9 @@ function App() {
     } finally {
       setLoading(false);
       setBackgroundRefreshing(false);
+      setFetchInProgress(false);
     }
-  }, [token, handleTokenExpiration]);
+  }, [token, handleTokenExpiration, fetchInProgress]);
 
   useEffect(() => {
     if (token) {
