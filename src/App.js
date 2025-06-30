@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { graphql } from '@octokit/graphql';
 import { formatDistanceToNow, addDays } from 'date-fns';
 import { initializeAuth, getAuthUrl, getToken, clearToken } from './auth';
+import { isRateLimit, handleRateLimit, resetRateLimit, isBlocked, getSecondsUntilRetry } from './simple-rate-limit';
 
 const Container = styled.div`
   margin: 0 auto;
@@ -877,6 +878,43 @@ const BackgroundRefreshPill = styled.div`
   }
 `;
 
+const RateLimitNotification = styled.div`
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(139, 69, 19, 0.95);
+  border: 1px solid #ff6b35;
+  border-radius: 8px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1001;
+  backdrop-filter: blur(4px);
+  animation: slideDown 0.3s ease;
+  max-width: 90%;
+  text-align: center;
+
+  @keyframes slideDown {
+    from {
+      transform: translate(-50%, -100%);
+      opacity: 0;
+    }
+    to {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+  }
+`;
+
+
+
 function App() {
   const [token, setToken] = useState(getToken());
   const [prs, setPRs] = useState({
@@ -920,6 +958,29 @@ function App() {
   });
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [activeButtonId, setActiveButtonId] = useState(null);
+
+      // Simple countdown component for rate limiting
+  const RateLimitCountdown = () => {
+    const [seconds, setSeconds] = useState(getSecondsUntilRetry());
+
+    useEffect(() => {
+      if (!isBlocked()) return;
+
+      const interval = setInterval(() => {
+        const remaining = getSecondsUntilRetry();
+        setSeconds(remaining);
+
+        if (remaining <= 0) {
+          clearInterval(interval);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }, [isBlocked()]);
+
+    if (seconds <= 0) return "retrying...";
+    return `retrying in ${seconds} seconds`;
+  };
 
   useEffect(() => {
     // Initialize authentication for local development
@@ -1059,6 +1120,12 @@ function App() {
     // Prevent multiple simultaneous fetches
     if (fetchInProgress) {
       console.log('Fetch already in progress, skipping...');
+      return;
+    }
+
+    // Don't fetch if we're currently being rate limited
+    if (isBlocked()) {
+      console.log('Rate limited, skipping fetch');
       return;
     }
 
@@ -1292,6 +1359,13 @@ function App() {
 
       const result = await graphqlWithAuth(query).catch(e => {
         console.error('GraphQL error:', e);
+
+        // Simple rate limit handling
+        if (isRateLimit(e)) {
+          handleRateLimit(fetchPRs);
+          return null;
+        }
+
         // Check if the error is a 401 unauthorized error
         if (e.status === 401 || (e.errors && e.errors.some(err => err.type === 'UNAUTHORIZED'))) {
           handleTokenExpiration();
@@ -1443,8 +1517,18 @@ function App() {
         mentioned: mentionedPRs,
         alreadyReviewed: alreadyReviewedPRs
       });
+
+      // Reset rate limiting on successful request
+      resetRateLimit();
     } catch (error) {
       console.error('Error fetching PRs:', error);
+
+      // Simple rate limit handling
+      if (isRateLimit(error)) {
+        handleRateLimit(fetchPRs);
+        return; // Exit early for rate limit errors
+      }
+
       // Check if the error is a 401 unauthorized error
       if (error.status === 401 ||
           (error.errors && error.errors.some(err => err.type === 'UNAUTHORIZED')) ||
@@ -2051,6 +2135,12 @@ function App() {
           <LoadingSpinner style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
           Refreshing PRs...
         </BackgroundRefreshPill>
+      )}
+
+      {isBlocked() && (
+        <RateLimitNotification>
+          ⚠️ Rate limited - <RateLimitCountdown />
+        </RateLimitNotification>
       )}
 
       {loading ? (
