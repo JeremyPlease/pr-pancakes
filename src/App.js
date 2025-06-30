@@ -896,15 +896,26 @@ function App() {
   });
   const [dismissedPRs, setDismissedPRs] = useState({});
   const [openDismissDropdown, setOpenDismissDropdown] = useState(null);
+  // Helper function to safely parse localStorage JSON
+  const safeParseJSON = (key, defaultValue) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+      console.warn(`Failed to parse localStorage item '${key}':`, error);
+      return defaultValue;
+    }
+  };
+
   const [isDismissedSectionExpanded, setIsDismissedSectionExpanded] = useState(
-    JSON.parse(localStorage.getItem('sectionExpanded_dismissed') || 'false')
+    safeParseJSON('sectionExpanded_dismissed', false)
   );
   const [expandedSections, setExpandedSections] = useState({
-    authored: JSON.parse(localStorage.getItem('sectionExpanded_authored') || 'true'),
-    directReview: JSON.parse(localStorage.getItem('sectionExpanded_directReview') || 'true'),
-    teamReview: JSON.parse(localStorage.getItem('sectionExpanded_teamReview') || 'true'),
-    mentioned: JSON.parse(localStorage.getItem('sectionExpanded_mentioned') || 'true'),
-    alreadyReviewed: JSON.parse(localStorage.getItem('sectionExpanded_alreadyReviewed') || 'true')
+    authored: safeParseJSON('sectionExpanded_authored', true),
+    directReview: safeParseJSON('sectionExpanded_directReview', true),
+    teamReview: safeParseJSON('sectionExpanded_teamReview', true),
+    mentioned: safeParseJSON('sectionExpanded_mentioned', true),
+    alreadyReviewed: safeParseJSON('sectionExpanded_alreadyReviewed', true)
   });
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [activeButtonId, setActiveButtonId] = useState(null);
@@ -921,9 +932,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const savedDismissedPRs = localStorage.getItem('dismissedPRs');
-    if (savedDismissedPRs) {
-      setDismissedPRs(JSON.parse(savedDismissedPRs));
+    const savedDismissedPRs = safeParseJSON('dismissedPRs', {});
+    if (savedDismissedPRs && Object.keys(savedDismissedPRs).length > 0) {
+      setDismissedPRs(savedDismissedPRs);
     }
   }, []);
 
