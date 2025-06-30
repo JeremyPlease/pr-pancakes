@@ -1648,10 +1648,43 @@ function App() {
     if (dismissal.dismissedUntil === 'until-update' && pr.updatedAt === dismissal.lastUpdateTime) return true;
     if (dismissal.dismissedUntil && new Date(dismissal.dismissedUntil) > new Date()) return true;
 
-    // If we get here, the dismissal has expired
-    handleRestore(pr.id);
+    // If we get here, the dismissal has expired - mark for cleanup but don't restore immediately
+    // to avoid side effects during render
     return false;
   };
+
+  // Separate function to check and clean up expired dismissals
+  const cleanupExpiredDismissals = useCallback(() => {
+    const now = new Date();
+    const expiredIds = [];
+
+    Object.entries(dismissedPRs).forEach(([prId, dismissal]) => {
+      if (!dismissal || !dismissal.pr) return;
+
+      // Check if dismissal has expired
+      if (dismissal.dismissedUntil !== 'forever' &&
+          dismissal.dismissedUntil !== 'until-update' &&
+          dismissal.dismissedUntil &&
+          new Date(dismissal.dismissedUntil) <= now) {
+        expiredIds.push(prId);
+      }
+    });
+
+    // Clean up expired dismissals
+    if (expiredIds.length > 0) {
+      setDismissedPRs(prev => {
+        const newDismissed = { ...prev };
+        expiredIds.forEach(id => delete newDismissed[id]);
+        return newDismissed;
+      });
+    }
+  }, [dismissedPRs]);
+
+  // Clean up expired dismissals periodically
+  useEffect(() => {
+    const interval = setInterval(cleanupExpiredDismissals, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [cleanupExpiredDismissals]);
 
   const handleLogout = () => {
     localStorage.removeItem('github_token');
