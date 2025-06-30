@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import styled from 'styled-components';
 import { graphql } from '@octokit/graphql';
 import { formatDistanceToNow, addDays } from 'date-fns';
+import { initializeAuth, getAuthUrl, getToken, clearToken } from './auth';
 
 const Container = styled.div`
   margin: 0 auto;
@@ -877,7 +878,7 @@ const BackgroundRefreshPill = styled.div`
 `;
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('github_token'));
+  const [token, setToken] = useState(getToken());
   const [prs, setPRs] = useState({
     authored: [],
     directReview: [],
@@ -921,6 +922,9 @@ function App() {
   const [activeButtonId, setActiveButtonId] = useState(null);
 
   useEffect(() => {
+    // Initialize authentication for local development
+    initializeAuth();
+
     const urlParams = new URLSearchParams(window.location.search);
     const newToken = urlParams.get('token');
 
@@ -982,7 +986,7 @@ function App() {
         const viewportHeight = window.innerHeight;
 
         // Find the parent table container to check for horizontal scrolling
-        const tableContainer = activeButton.closest('.table-container');
+        // const tableContainer = activeButton.closest('.table-container');
         let leftOffset = buttonRect.left;
         let topOffset = buttonRect.bottom;
 
@@ -1041,11 +1045,11 @@ function App() {
   }, [openDismissDropdown]);
 
   // Function to handle token expiration
-  const handleTokenExpiration = useCallback(() => {
+    const handleTokenExpiration = useCallback(() => {
     console.log('Authentication token expired or invalid. Redirecting to auth...');
-    localStorage.removeItem('github_token');
+    clearToken();
     setToken(null);
-    window.location.href = '/auth';
+    window.location.href = getAuthUrl();
   }, []);
 
   // Add state to track if a fetch is already in progress
@@ -1452,7 +1456,7 @@ function App() {
       setBackgroundRefreshing(false);
       setFetchInProgress(false);
     }
-  }, [token, handleTokenExpiration, fetchInProgress]);
+  }, [token, handleTokenExpiration]);
 
   useEffect(() => {
     if (token) {
@@ -1474,10 +1478,12 @@ function App() {
     };
   }, [token, fetchPRs]);
 
-  const handleLogin = () => {
+
+
+    const handleLogin = () => {
     // Clear any existing token before redirecting
-    localStorage.removeItem('github_token');
-    window.location.href = 'https://prpancakes.com/auth';
+    clearToken();
+    window.location.href = getAuthUrl();
   };
 
   const getSortedPRs = (prs, sortConfig) => {
@@ -1687,7 +1693,7 @@ function App() {
   }, [cleanupExpiredDismissals]);
 
   const handleLogout = () => {
-    localStorage.removeItem('github_token');
+    clearToken();
     // Reset all state to initial values
     setToken(null);
     setPRs({
@@ -2002,6 +2008,8 @@ function App() {
 
     return null;
   };
+
+
 
   if (!token) {
     return (

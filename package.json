@@ -17,14 +17,17 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "wrangler": "^3.109.3"
+    "concurrently": "^9.2.0",
+    "wrangler": "^4.22.0"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "deploy": "wrangler pages deploy build --project-name=pr-pancakes"
+    "deploy": "wrangler pages deploy build --project-name=pr-pancakes",
+    "dev:functions": "wrangler pages dev --port 8788 --compatibility-date=2025-06-29",
+    "dev": "concurrently \"npm run dev:functions\" \"npm start\""
   },
   "eslintConfig": {
     "extends": [

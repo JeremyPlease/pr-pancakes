@@ -1,14 +1,19 @@
 export async function onRequestGet(context) {
+  const env = context.env;
+  const url = new URL(context.request.url);
+
+  // Determine allowed origin based on environment
+  const isLocal = url.hostname === 'localhost';
+  const allowedOrigin = isLocal ? 'http://localhost:3000' : 'https://prpancakes.com';
+
   try {
-    const env = context.env;
-    const url = new URL(context.request.url);
     const code = url.searchParams.get('code');
 
     if (!code) {
       return new Response('Missing authorization code', {
         status: 400,
         headers: {
-          'Access-Control-Allow-Origin': 'https://prpancakes.com',
+          'Access-Control-Allow-Origin': allowedOrigin,
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
         }
@@ -34,7 +39,7 @@ export async function onRequestGet(context) {
       return new Response('Failed to obtain access token', {
         status: 400,
         headers: {
-          'Access-Control-Allow-Origin': 'https://prpancakes.com',
+          'Access-Control-Allow-Origin': allowedOrigin,
           'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
         }
@@ -75,21 +80,29 @@ export async function onRequestGet(context) {
     <body>
       <div class="container">
         <div class="spinner"></div>
-        <h2>🥞 Authenticating with GitHub...</h2>
+        <h2>&#x1F95E; Authenticating with GitHub...</h2>
         <p>Redirecting you back to PR Pancakes...</p>
       </div>
       <script>
         (function() {
           const token = ${JSON.stringify(data.access_token)};
 
-          // Store token securely in localStorage
+          // Store token securely in localStorage and redirect to main app
           if (window.localStorage) {
             localStorage.setItem('github_token', token);
           }
 
-          // Redirect to main app
+                    // Redirect to main app with token
+          const isLocal = window.location.href.includes('localhost:8788');
+          let redirectUrl;
+          if (isLocal) {
+            redirectUrl = 'http://localhost:3000?token=' + encodeURIComponent(token);
+          } else {
+            redirectUrl = 'https://prpancakes.com';
+          }
+
           setTimeout(() => {
-            window.location.href = 'https://prpancakes.com';
+            window.location.href = redirectUrl;
           }, 1500);
         })();
       </script>
@@ -101,7 +114,7 @@ export async function onRequestGet(context) {
       status: 200,
       headers: {
         'Content-Type': 'text/html',
-        'Access-Control-Allow-Origin': 'https://prpancakes.com',
+        'Access-Control-Allow-Origin': allowedOrigin,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       }
@@ -111,7 +124,7 @@ export async function onRequestGet(context) {
     return new Response('Authentication failed', {
       status: 500,
       headers: {
-        'Access-Control-Allow-Origin': 'https://prpancakes.com',
+        'Access-Control-Allow-Origin': allowedOrigin,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       }

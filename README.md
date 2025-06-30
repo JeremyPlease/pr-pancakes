@@ -38,12 +38,20 @@ cd pr-pancakes
 npm install
 ```
 
-3. Start the development server
+3. Set up environment variables
 ```bash
-npm start
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with your GitHub OAuth credentials
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+4. Start the development environment
+```bash
+npm run dev
+```
+
+5. Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+
+> 📝 **Note**: For local development with full GitHub integration, you'll need to set up a GitHub OAuth App.
 
 ## Deployment
 
