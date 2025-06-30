@@ -978,24 +978,49 @@ function App() {
       const activeButton = document.querySelector(`.dismiss-button[data-pr-id="${openDismissDropdown}"]`);
       if (activeButton) {
         const buttonRect = activeButton.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
 
         // Find the parent table container to check for horizontal scrolling
         const tableContainer = activeButton.closest('.table-container');
         let leftOffset = buttonRect.left;
+        let topOffset = buttonRect.bottom;
 
-        // If the table is scrolled horizontally, adjust the dropdown position
-        if (tableContainer) {
-          // Ensure the dropdown doesn't go off-screen to the right
-          const viewportWidth = window.innerWidth;
-          const dropdownWidth = 200; // Approximate width of dropdown
+        // Calculate actual dropdown dimensions if possible
+        const tempDropdown = document.createElement('div');
+        tempDropdown.style.position = 'absolute';
+        tempDropdown.style.visibility = 'hidden';
+        tempDropdown.style.width = 'max-content';
+        tempDropdown.style.minWidth = '200px';
+        tempDropdown.innerHTML = `
+          <div style="padding: 6px 0; font-size: 13px;">
+            <div style="padding: 8px 16px;">Until next update</div>
+            <div style="padding: 8px 16px;">Forever</div>
+            <div style="padding: 8px 16px;">For 1 day</div>
+            <div style="padding: 8px 16px;">For 3 days</div>
+            <div style="padding: 8px 16px;">For 7 days</div>
+          </div>
+        `;
+        document.body.appendChild(tempDropdown);
+        const dropdownWidth = tempDropdown.offsetWidth;
+        const dropdownHeight = tempDropdown.offsetHeight;
+        document.body.removeChild(tempDropdown);
 
-          if (leftOffset + dropdownWidth > viewportWidth) {
-            leftOffset = Math.max(0, viewportWidth - dropdownWidth - 10);
-          }
+        // Ensure the dropdown doesn't go off-screen to the right
+        if (leftOffset + dropdownWidth > viewportWidth) {
+          leftOffset = Math.max(10, viewportWidth - dropdownWidth - 10);
         }
 
+        // Ensure the dropdown doesn't go off-screen to the bottom
+        if (topOffset + dropdownHeight > viewportHeight) {
+          topOffset = Math.max(10, buttonRect.top - dropdownHeight);
+        }
+
+        // Ensure left offset is not negative
+        leftOffset = Math.max(10, leftOffset);
+
         setDropdownPosition({
-          top: buttonRect.bottom,
+          top: topOffset,
           left: leftOffset
         });
       }
