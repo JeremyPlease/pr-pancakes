@@ -101,6 +101,69 @@ const PageTitle = styled.h1`
   font-weight: 700;
 `;
 
+// Dims stale content while a refetch is in flight
+const ContentDimmer = styled.div`
+  transition: opacity 0.25s ease;
+
+  &[data-loading="true"] {
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+  }
+`;
+
+const SkeletonBlock = styled.div`
+  border-radius: 10px;
+  background: linear-gradient(90deg, #161b22 25%, #1f242c 50%, #161b22 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+`;
+
+const SkeletonTiles = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+
+  ${SkeletonBlock} {
+    height: 96px;
+  }
+`;
+
+const SkeletonPair = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+
+  ${SkeletonBlock} {
+    height: 260px;
+  }
+`;
+
+// Mirrors the dashboard layout so the first load doesn't flash N/A tiles
+const AnalyticsSkeleton = () => (
+  <div aria-busy="true" aria-label="Loading analytics">
+    <SkeletonTiles>
+      {Array.from({ length: 8 }, (_, i) => <SkeletonBlock key={i} />)}
+    </SkeletonTiles>
+    <SkeletonBlock style={{ height: '380px', marginBottom: '24px' }} />
+    <SkeletonPair>
+      <SkeletonBlock />
+      <SkeletonBlock />
+    </SkeletonPair>
+    <SkeletonTiles>
+      {Array.from({ length: 6 }, (_, i) => <SkeletonBlock key={i} />)}
+    </SkeletonTiles>
+    <SkeletonBlock style={{ height: '300px' }} />
+  </div>
+);
+
 const SectionHeading = styled.div`
   margin: 36px 0 16px;
   padding-top: 24px;
@@ -571,7 +634,9 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
         </CheckboxContainer>
       </DateRangePicker>
 
-      {filteredData.length === 0 && authoredData.length === 0 && !state.loading ? (
+      {state.loading && !state.lastFetch ? (
+        <AnalyticsSkeleton />
+      ) : filteredData.length === 0 && authoredData.length === 0 && !state.loading ? (
         <EmptyState>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📈</div>
           <div style={{ fontSize: '18px', marginBottom: '8px' }}>No analytics data available</div>
@@ -580,7 +645,7 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
           </div>
         </EmptyState>
       ) : (
-        <>
+        <ContentDimmer data-loading={state.loading.toString()}>
           <SectionHeading>
             <h2>🍳 Your Reviewing</h2>
             <p>How you keep other people's PRs moving.</p>
@@ -638,7 +703,7 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
             excludeWeekends={state.excludeWeekends}
             timezone={userTimezone}
           />
-        </>
+        </ContentDimmer>
       )}
     </AnalyticsContainer>
   );
