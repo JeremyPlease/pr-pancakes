@@ -409,87 +409,37 @@ const Main = styled.main`
   padding: 0 20px 24px;
 `;
 
-const RefreshButton = styled.button`
-  display: flex;
+// Compact icon-only refresh, shown in the content toolbar of the views it
+// actually refreshes (dashboard and Short Stack)
+const RefreshIconButton = styled.button`
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: linear-gradient(to bottom, #f8d68e, #f0c46c);
-  color: #0d1117;
-  border: 1px solid transparent;
-  padding: 8px 16px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
   transition: all 0.2s ease-in-out;
-  box-shadow: 0 2px 8px rgba(240, 196, 108, 0.25);
-  position: relative;
-  overflow: hidden;
 
-  /* Add subtle shine effect */
-  &::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: linear-gradient(
-      to bottom right,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.2) 50%,
-      rgba(255, 255, 255, 0) 100%
-    );
-    transform: rotate(30deg);
-    transition: transform 0.5s;
-  }
-
-  &:hover {
-    background: linear-gradient(to bottom, #f9dea0, #f8d68e);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(240, 196, 108, 0.35);
-
-    &::after {
-      transform: rotate(30deg) translate(50%, 50%);
-    }
-  }
-
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  &:hover:not(:disabled) {
+    background: #30363d;
+    border-color: #f0c46c;
+    color: #f0c46c;
   }
 
   &:disabled {
-    opacity: 0.7;
     cursor: not-allowed;
-    transform: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-
-  &[data-loading="true"] {
-    animation: pulse 1.5s infinite;
-    background: linear-gradient(to bottom, #f0c46c, #e0b45c);
-    box-shadow: 0 2px 8px rgba(240, 196, 108, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1);
-  }
-
-  @keyframes pulse {
-    0% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.7;
-    }
-    100% {
-      opacity: 1;
-    }
+    opacity: 0.7;
   }
 
   svg {
-    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
     transition: transform 0.3s ease;
   }
 
-  &:hover svg {
+  &:hover:not(:disabled) svg {
     transform: rotate(180deg);
   }
 
@@ -501,6 +451,13 @@ const RefreshButton = styled.button`
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
+`;
+
+// Slim right-aligned row above page content
+const ContentToolbar = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
 `;
 
 const LogoutButton = styled.button`
@@ -2097,15 +2054,6 @@ function App() {
             <NavButton to="/analytics" className={location.pathname === '/analytics' ? 'active' : ''}>
               📈 Analytics
             </NavButton>
-            {location.pathname !== '/analytics' && (
-              <RefreshButton
-                onClick={handleRefresh}
-                disabled={loading || backgroundRefreshing}
-                data-loading={loading || backgroundRefreshing}
-              >
-                <RefreshIcon /> {loading ? 'Refreshing...' : backgroundRefreshing ? 'Refreshing...' : 'Refresh PRs'}
-              </RefreshButton>
-            )}
             <LogoutButton onClick={handleLogout} title="Log out">
               <LogoutIcon />
             </LogoutButton>
@@ -2127,6 +2075,19 @@ function App() {
       )}
 
       <Main>
+      {location.pathname !== '/analytics' && (
+        <ContentToolbar>
+          <RefreshIconButton
+            onClick={handleRefresh}
+            disabled={loading || backgroundRefreshing}
+            data-loading={(loading || backgroundRefreshing).toString()}
+            title="Refresh PRs"
+            aria-label="Refresh PRs"
+          >
+            <RefreshIcon />
+          </RefreshIconButton>
+        </ContentToolbar>
+      )}
       <Routes>
         <Route path="/" element={
           loading ? (
