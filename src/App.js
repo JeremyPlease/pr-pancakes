@@ -7,6 +7,7 @@ import { formatDistanceToNow, addDays } from 'date-fns';
 import { initializeAuth, getAuthUrl, getToken, clearToken } from './auth';
 import { isRateLimit, handleRateLimit, resetRateLimit, isBlocked, getSecondsUntilRetry } from './simple-rate-limit';
 import AnalyticsView from './components/AnalyticsView';
+import FocusView from './components/FocusView';
 
 const Container = styled.div`
   margin: 0 auto;
@@ -1565,11 +1566,11 @@ function App() {
     }
   }, [token, fetchPRs]);
 
-  // Refresh PRs when returning to the page, but only while on the dashboard —
-  // the analytics view manages its own data.
+  // Refresh PRs when returning to the page, but not on analytics —
+  // that view manages its own data.
   useEffect(() => {
     const handleWindowFocus = () => {
-      if (token && location.pathname === '/') {
+      if (token && location.pathname !== '/analytics') {
         fetchPRs(true); // Pass true to indicate this is a background refresh
       }
     };
@@ -2090,10 +2091,13 @@ function App() {
             <NavButton to="/" className={location.pathname === '/' ? 'active' : ''}>
               📋 PR Dashboard
             </NavButton>
+            <NavButton to="/focus" className={location.pathname === '/focus' ? 'active' : ''}>
+              🥞 Short Stack
+            </NavButton>
             <NavButton to="/analytics" className={location.pathname === '/analytics' ? 'active' : ''}>
               📈 Analytics
             </NavButton>
-            {location.pathname === '/' && (
+            {location.pathname !== '/analytics' && (
               <RefreshButton
                 onClick={handleRefresh}
                 disabled={loading || backgroundRefreshing}
@@ -2161,6 +2165,13 @@ function App() {
               {renderDismissedPRs()}
             </>
           )
+        } />
+        <Route path="/focus" element={
+          <FocusView
+            prs={prs}
+            isDismissed={isDismissed}
+            loading={loading}
+          />
         } />
         <Route path="/analytics" element={
           <AnalyticsView
