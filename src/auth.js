@@ -12,7 +12,8 @@ export const getAuthUrl = () => {
     // For local development with Wrangler
     return 'http://localhost:8788/auth';
   } else {
-    return '/functions/auth';
+    // Pages mounts files in functions/ at the site root: functions/auth.js -> /auth
+    return '/auth';
   }
 };
 

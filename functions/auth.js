@@ -1,11 +1,10 @@
 export function onRequestGet(context) {
   const env = context.env;
+  const url = new URL(context.request.url);
 
-  // Determine redirect URI based on environment
-  const isLocal = context.request.url.includes('localhost:8788');
-  const redirectUri = isLocal
-    ? 'http://localhost:8788/auth-callback'
-    : 'https://prpancakes.com/functions/auth-callback';
+  // The callback function lives at /auth-callback on whichever origin is
+  // serving us (prod or wrangler dev) — Pages mounts functions/ at the root
+  const redirectUri = `${url.origin}/auth-callback`;
 
   return Response.redirect(
     `https://github.com/login/oauth/authorize?client_id=${env.GITHUB_CLIENT_ID}&scope=repo,user,read:org&redirect_uri=${encodeURIComponent(redirectUri)}`,
