@@ -438,6 +438,24 @@ const RefreshButton = styled.button`
       opacity: 1;
     }
   }
+
+  svg {
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+    transition: transform 0.3s ease;
+  }
+
+  &:hover svg {
+    transform: rotate(180deg);
+  }
+
+  &[data-loading="true"] svg {
+    animation: icon-spin 1.5s linear infinite;
+  }
+
+  @keyframes icon-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 `;
 
 const LogoutButton = styled.button`
@@ -516,33 +534,7 @@ const NavButton = styled(Link)`
 `;
 
 const RefreshIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-    fill="currentColor"
-    style={{
-      filter: 'drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1))'
-    }}
-    className="refresh-icon"
-  >
-    <style>
-      {`
-        .refresh-icon {
-          transition: transform 0.3s ease;
-        }
-        button:hover .refresh-icon {
-          transform: rotate(180deg);
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        button[data-loading="true"] .refresh-icon {
-          animation: spin 1.5s linear infinite;
-        }
-      `}
-    </style>
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
     <path d="M8 3a5 5 0 0 1 4.546 2.914.5.5 0 0 0 .908-.417A6 6 0 0 0 8 2C5.201 2 2.872 3.757 2.186 6.244a.5.5 0 1 0 .956.291C3.708 4.389 5.67 3 8 3z"/>
     <path d="M8 13a5 5 0 0 1-4.546-2.914.5.5 0 0 0-.908.417A6 6 0 0 0 8 14c2.799 0 5.128-1.757 5.814-4.244a.5.5 0 1 0-.956-.291C12.292 11.611 10.33 13 8 13z"/>
   </svg>
@@ -955,6 +947,98 @@ const RateLimitNotification = styled.div`
 
 
 
+// Fields common to every PR search below; per-search additions (reviews,
+// reviewRequests) are appended where each section needs them.
+const PR_CORE_FIELDS = `
+  id
+  title
+  number
+  url
+  repository {
+    name
+    owner {
+      login
+    }
+  }
+  author {
+    login
+  }
+  createdAt
+  updatedAt
+  comments(first: 100) {
+    totalCount
+    nodes {
+      author {
+        login
+        __typename
+      }
+    }
+  }
+  reviewThreads(first: 100) {
+    nodes {
+      isResolved
+    }
+  }
+`;
+
+// Helper function to safely parse localStorage JSON
+const safeParseJSON = (key, defaultValue) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.warn(`Failed to parse localStorage item '${key}':`, error);
+    return defaultValue;
+  }
+};
+
+// Dashboard sections, rendered in order. Each renders a PR table from
+// prs[key], with optional extra columns.
+const PR_SECTIONS = [
+  {
+    key: 'authored',
+    title: 'Your Pull Requests',
+    tooltip: 'Pull requests that you have opened and are still open.'
+  },
+  {
+    key: 'directReview',
+    title: 'Needs Your Review',
+    tooltip: 'Open pull requests where you have been directly requested as a reviewer.',
+    lastReviewColumn: true
+  },
+  {
+    key: 'teamReview',
+    title: 'Team Reviews',
+    tooltip: 'Open pull requests where one of your teams has been requested to review.',
+    teamColumn: true,
+    lastReviewColumn: true
+  },
+  {
+    key: 'mentioned',
+    title: 'Mentioned',
+    tooltip: 'Open pull requests where you have been mentioned in the description or comments.'
+  },
+  {
+    key: 'alreadyReviewed',
+    title: 'Already Reviewed',
+    tooltip: "Pull requests that you've already reviewed but are still open.",
+    lastReviewColumn: true
+  }
+];
+
+const DISMISS_OPTIONS = [
+  { key: 'until-update', label: 'Until next update' },
+  { key: 'forever', label: 'Forever' },
+  { key: '1day', label: 'For 1 day', days: 1 },
+  { key: '3days', label: 'For 3 days', days: 3 },
+  { key: '7days', label: 'For 7 days', days: 7 }
+];
+
+// Approximate rendered size of the dismiss dropdown, used to keep it on
+// screen without measuring a throwaway DOM node.
+const DISMISS_DROPDOWN_WIDTH = 200;
+const DISMISS_DROPDOWN_HEIGHT = 190;
+
 // Simple countdown shown while rate limited. Lives outside App so it isn't
 // redefined (and remounted) on every App render.
 const RateLimitCountdown = () => {
@@ -992,26 +1076,13 @@ function App() {
   });
   const [dismissedPRs, setDismissedPRs] = useState({});
   const [openDismissDropdown, setOpenDismissDropdown] = useState(null);
-  // Helper function to safely parse localStorage JSON
-  const safeParseJSON = (key, defaultValue) => {
-    try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : defaultValue;
-    } catch (error) {
-      console.warn(`Failed to parse localStorage item '${key}':`, error);
-      return defaultValue;
-    }
-  };
-
-  const [isDismissedSectionExpanded, setIsDismissedSectionExpanded] = useState(
-    safeParseJSON('sectionExpanded_dismissed', false)
-  );
   const [expandedSections, setExpandedSections] = useState({
     authored: safeParseJSON('sectionExpanded_authored', true),
     directReview: safeParseJSON('sectionExpanded_directReview', true),
     teamReview: safeParseJSON('sectionExpanded_teamReview', true),
     mentioned: safeParseJSON('sectionExpanded_mentioned', true),
-    alreadyReviewed: safeParseJSON('sectionExpanded_alreadyReviewed', true)
+    alreadyReviewed: safeParseJSON('sectionExpanded_alreadyReviewed', true),
+    dismissed: safeParseJSON('sectionExpanded_dismissed', false)
   });
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [activeButtonId, setActiveButtonId] = useState(null);
@@ -1057,11 +1128,6 @@ function App() {
     });
   }, [expandedSections]);
 
-  // Save dismissed section expanded state to localStorage
-  useEffect(() => {
-    localStorage.setItem('sectionExpanded_dismissed', JSON.stringify(isDismissedSectionExpanded));
-  }, [isDismissedSectionExpanded]);
-
   // Add click outside handler
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1083,51 +1149,21 @@ function App() {
       const activeButton = document.querySelector(`.dismiss-button[data-pr-id="${openDismissDropdown}"]`);
       if (activeButton) {
         const buttonRect = activeButton.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
 
-        // Find the parent table container to check for horizontal scrolling
-        // const tableContainer = activeButton.closest('.table-container');
+        // Keep the dropdown on screen: flip above the button if it would
+        // overflow the bottom, clamp to the right/left edges.
         let leftOffset = buttonRect.left;
         let topOffset = buttonRect.bottom;
 
-        // Calculate actual dropdown dimensions if possible
-        const tempDropdown = document.createElement('div');
-        tempDropdown.style.position = 'absolute';
-        tempDropdown.style.visibility = 'hidden';
-        tempDropdown.style.width = 'max-content';
-        tempDropdown.style.minWidth = '200px';
-        tempDropdown.innerHTML = `
-          <div style="padding: 6px 0; font-size: 13px;">
-            <div style="padding: 8px 16px;">Until next update</div>
-            <div style="padding: 8px 16px;">Forever</div>
-            <div style="padding: 8px 16px;">For 1 day</div>
-            <div style="padding: 8px 16px;">For 3 days</div>
-            <div style="padding: 8px 16px;">For 7 days</div>
-          </div>
-        `;
-        document.body.appendChild(tempDropdown);
-        const dropdownWidth = tempDropdown.offsetWidth;
-        const dropdownHeight = tempDropdown.offsetHeight;
-        document.body.removeChild(tempDropdown);
-
-        // Ensure the dropdown doesn't go off-screen to the right
-        if (leftOffset + dropdownWidth > viewportWidth) {
-          leftOffset = Math.max(10, viewportWidth - dropdownWidth - 10);
+        if (leftOffset + DISMISS_DROPDOWN_WIDTH > window.innerWidth) {
+          leftOffset = Math.max(10, window.innerWidth - DISMISS_DROPDOWN_WIDTH - 10);
         }
-
-        // Ensure the dropdown doesn't go off-screen to the bottom
-        if (topOffset + dropdownHeight > viewportHeight) {
-          topOffset = Math.max(10, buttonRect.top - dropdownHeight);
+        if (topOffset + DISMISS_DROPDOWN_HEIGHT > window.innerHeight) {
+          topOffset = Math.max(10, buttonRect.top - DISMISS_DROPDOWN_HEIGHT);
         }
-
-        // Ensure left offset is not negative
         leftOffset = Math.max(10, leftOffset);
 
-        setDropdownPosition({
-          top: topOffset,
-          left: leftOffset
-        });
+        setDropdownPosition({ top: topOffset, left: leftOffset });
       }
     };
 
@@ -1191,7 +1227,6 @@ function App() {
             login
             organizations(first: 10) {
               nodes {
-                name
                 teams(first: 10) {
                   nodes {
                     name
@@ -1203,30 +1238,7 @@ function App() {
           authoredPRs: search(query: "is:pr is:open author:@me archived:false", type: ISSUE, first: 100) {
             nodes {
               ... on PullRequest {
-                id
-                title
-                number
-                url
-                repository {
-                  name
-                  owner {
-                    login
-                  }
-                }
-                author {
-                  login
-                }
-                createdAt
-                updatedAt
-                comments(first: 100) {
-                  totalCount
-                  nodes {
-                    author {
-                      login
-                      __typename
-                    }
-                  }
-                }
+                ${PR_CORE_FIELDS}
                 reviewRequests {
                   totalCount
                 }
@@ -1249,41 +1261,13 @@ function App() {
                     }
                   }
                 }
-                reviewThreads(first: 100) {
-                  nodes {
-                    isResolved
-                  }
-                }
               }
             }
           }
           reviewRequestedPRs: search(query: "is:pr is:open review-requested:@me archived:false", type: ISSUE, first: 100) {
             nodes {
               ... on PullRequest {
-                id
-                title
-                number
-                url
-                repository {
-                  name
-                  owner {
-                    login
-                  }
-                }
-                author {
-                  login
-                }
-                createdAt
-                updatedAt
-                comments(first: 100) {
-                  totalCount
-                  nodes {
-                    author {
-                      login
-                      __typename
-                    }
-                  }
-                }
+                ${PR_CORE_FIELDS}
                 reviews(first: 10) {
                   nodes {
                     author {
@@ -1291,11 +1275,6 @@ function App() {
                     }
                     submittedAt
                     state
-                  }
-                }
-                reviewThreads(first: 100) {
-                  nodes {
-                    isResolved
                   }
                 }
                 reviewRequests(first: 10) {
@@ -1316,37 +1295,9 @@ function App() {
           mentionedPRs: search(query: "is:pr is:open mentions:@me -author:@me archived:false", type: ISSUE, first: 100) {
             nodes {
               ... on PullRequest {
-                id
-                title
-                number
-                url
-                repository {
-                  name
-                  owner {
-                    login
-                  }
-                }
-                author {
-                  login
-                }
-                createdAt
-                updatedAt
-                comments(first: 100) {
-                  totalCount
-                  nodes {
-                    author {
-                      login
-                      __typename
-                    }
-                  }
-                }
+                ${PR_CORE_FIELDS}
                 reviews {
                   totalCount
-                }
-                reviewThreads(first: 100) {
-                  nodes {
-                    isResolved
-                  }
                 }
               }
             }
@@ -1354,30 +1305,7 @@ function App() {
           alreadyReviewedPRs: search(query: "is:pr is:open -author:@me -review-requested:@me reviewed-by:@me archived:false", type: ISSUE, first: 100) {
             nodes {
               ... on PullRequest {
-                id
-                title
-                number
-                url
-                repository {
-                  name
-                  owner {
-                    login
-                  }
-                }
-                author {
-                  login
-                }
-                createdAt
-                updatedAt
-                comments(first: 100) {
-                  totalCount
-                  nodes {
-                    author {
-                      login
-                      __typename
-                    }
-                  }
-                }
+                ${PR_CORE_FIELDS}
                 reviews(first: 10) {
                   nodes {
                     author {
@@ -1385,11 +1313,6 @@ function App() {
                     }
                     submittedAt
                     state
-                  }
-                }
-                reviewThreads(first: 100) {
-                  nodes {
-                    isResolved
                   }
                 }
               }
@@ -1471,6 +1394,22 @@ function App() {
         });
       };
 
+      // Annotate a PR with the viewer's most recent review ("2 days ago
+      // (approved)" / "Never")
+      const withUserLastReview = (pr) => {
+        const userReview = pr.reviews?.nodes
+          ?.filter(review => review.author?.login === result.viewer?.login)
+          ?.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
+
+        return {
+          ...pr,
+          lastReview: userReview
+            ? `${formatDistanceToNow(new Date(userReview.submittedAt))} ago (${userReview.state.toLowerCase()})`
+            : 'Never',
+          lastReviewDate: userReview ? userReview.submittedAt : null
+        };
+      };
+
       const processReviewPRs = (prs) => {
         const directReviewPRs = [];
         const teamReviewPRs = [];
@@ -1480,20 +1419,7 @@ function App() {
             ?.map(request => request.requestedReviewer?.name)
             ?.filter(name => name) || [];
 
-          const userReview = pr.reviews?.nodes
-            ?.filter(review => review.author?.login === result.viewer?.login)
-            ?.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
-
-          const lastReview = userReview
-            ? `${formatDistanceToNow(new Date(userReview.submittedAt))} ago (${userReview.state.toLowerCase()})`
-            : 'Never';
-
-          const prWithReview = {
-            ...pr,
-            teamNames,
-            lastReview,
-            lastReviewDate: userReview ? userReview.submittedAt : null
-          };
+          const prWithReview = { ...withUserLastReview(pr), teamNames };
 
           // Check if user is directly requested for review
           const isDirectlyRequested = pr.reviewRequests?.nodes
@@ -1522,30 +1448,7 @@ function App() {
         !allReviewPRs.some(reviewed => reviewed.id === pr.id)
       );
 
-      const processAlreadyReviewedPRs = (prs) => {
-        return prs.map(pr => {
-          const userReview = pr.reviews?.nodes
-            .filter(review => review.author?.login === result.viewer?.login)
-            .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
-
-          const lastReview = userReview
-            ? `${formatDistanceToNow(new Date(userReview.submittedAt))} ago (${userReview.state.toLowerCase()})`
-            : 'Never';
-
-          return {
-            ...pr,
-            lastReview,
-            lastReviewDate: userReview ? userReview.submittedAt : null,
-            unresolvedThreads: pr.reviewThreads?.nodes.filter(thread => !thread.isResolved).length || 0,
-            totalComments: ((pr.comments?.nodes?.filter(comment =>
-              comment?.author?.login &&
-              comment.author.__typename !== 'Bot'
-            )?.length || 0) + (pr.reviews?.totalCount || 0))
-          };
-        });
-      };
-
-      const alreadyReviewedPRs = processAlreadyReviewedPRs(result.alreadyReviewedPRs?.nodes || []).filter(pr =>
+      const alreadyReviewedPRs = processPRs(result.alreadyReviewedPRs?.nodes || []).map(withUserLastReview).filter(pr =>
         !authoredPRs.some(authored => authored.id === pr.id) &&
         !allReviewPRs.some(reviewed => reviewed.id === pr.id) &&
         !mentionedPRs.some(mentioned => mentioned.id === pr.id)
@@ -1736,34 +1639,9 @@ function App() {
     }
   };
 
-  const handleDismissOptionClick = (event, pr, option) => {
-    event.stopPropagation(); // Prevent the click from bubbling up
-    handleDismiss(pr, option);
-  };
-
   const handleDismiss = (pr, option) => {
     const now = new Date();
-    let until;
-
-    switch (option) {
-      case 'forever':
-        until = 'forever';
-        break;
-      case 'until-update':
-        until = 'until-update';
-        break;
-      case '1day':
-        until = addDays(now, 1).toISOString();
-        break;
-      case '3days':
-        until = addDays(now, 3).toISOString();
-        break;
-      case '7days':
-        until = addDays(now, 7).toISOString();
-        break;
-      default:
-        return;
-    }
+    const until = option.days ? addDays(now, option.days).toISOString() : option.key;
 
     // Extract only the necessary PR information to avoid circular references
     const simplifiedPR = {
@@ -1882,20 +1760,17 @@ function App() {
     }
   };
 
+  // Persistence is handled by the expandedSections effect above
   const toggleSectionExpanded = (section) => {
-    if (section === 'dismissed') {
-      const newState = !isDismissedSectionExpanded;
-      setIsDismissedSectionExpanded(newState);
-      localStorage.setItem('sectionExpanded_dismissed', JSON.stringify(newState));
-    } else {
-      setExpandedSections(prev => {
-        const newState = {
-          ...prev,
-          [section]: !prev[section]
-        };
-        localStorage.setItem(`sectionExpanded_${section}`, JSON.stringify(newState[section]));
-        return newState;
-      });
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Open the PR on GitHub unless the click came from a dismiss/restore button
+  const handleRowClick = (url, event) => {
+    if (!event.target.closest('.dismiss-button')) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setOpenDismissDropdown(null);
+      setActiveButtonId(null);
     }
   };
 
@@ -1907,15 +1782,6 @@ function App() {
     if (filteredPRs.length === 0) {
       return <EmptyStateMessage>🎉 No PRs here!</EmptyStateMessage>;
     }
-
-    const handleRowClick = (url, event) => {
-      // Prevent click if it's coming from the dismiss button
-      if (!event.target.closest('.dismiss-button')) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        setOpenDismissDropdown(null);
-        setActiveButtonId(null);
-      }
-    };
 
     return (
       <TableContainer className="table-container">
@@ -2063,19 +1929,10 @@ function App() {
         return 0;
       });
 
-    const handleDismissedRowClick = (url, event) => {
-      // Prevent click if it's coming from the restore button
-      if (!event.target.closest('.dismiss-button')) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        setOpenDismissDropdown(null);
-        setActiveButtonId(null);
-      }
-    };
-
     return (
       <PRSection>
         <CollapsibleHeader onClick={() => toggleSectionExpanded('dismissed')}>
-          <Caret data-expanded={isDismissedSectionExpanded.toString()}>▶</Caret>
+          <Caret data-expanded={expandedSections.dismissed.toString()}>▶</Caret>
           <SectionHeader>
             <PRCount data-has-items={dismissedPRsList.length > 0 ? "true" : "false"}>
               {dismissedPRsList.length}
@@ -2089,7 +1946,7 @@ function App() {
             </InfoIcon>
           </SectionHeader>
         </CollapsibleHeader>
-        <CollapsibleContent data-expanded={isDismissedSectionExpanded.toString()}>
+        <CollapsibleContent data-expanded={expandedSections.dismissed.toString()}>
           {dismissedPRsList.length === 0 ? (
             <EmptyStateMessage>🎉 No dismissed PRs!</EmptyStateMessage>
           ) : (
@@ -2108,7 +1965,7 @@ function App() {
                   {dismissedPRsList.map(({ pr, dismissedUntil }) => (
                     <ClickableRow
                       key={pr.id}
-                      onClick={(e) => handleDismissedRowClick(pr.url, e)}
+                      onClick={(e) => handleRowClick(pr.url, e)}
                       data-active={activeButtonId === pr.id}
                     >
                       <ClickableTd>{`${pr.repository.owner.login}/${pr.repository.name}`}</ClickableTd>
@@ -2143,31 +2000,8 @@ function App() {
     );
   };
 
-  // Helper function to find PR by ID
-  const findPRById = (prId) => {
-    if (!prId) return null;
-
-    const allPRs = [
-      ...(Array.isArray(prs.authored) ? prs.authored : []),
-      ...(Array.isArray(prs.directReview) ? prs.directReview : []),
-      ...(Array.isArray(prs.teamReview) ? prs.teamReview : []),
-      ...(Array.isArray(prs.mentioned) ? prs.mentioned : []),
-      ...(Array.isArray(prs.alreadyReviewed) ? prs.alreadyReviewed : [])
-    ];
-
-    // Use a type-safe approach to find the PR
-    for (let i = 0; i < allPRs.length; i++) {
-      /** @type {{ id: string }} */
-      const pr = allPRs[i];
-      if (pr && pr.id === prId) {
-        return pr;
-      }
-    }
-
-    return null;
-  };
-
-
+  const findPRById = (prId) =>
+    prId ? Object.values(prs).flat().find(pr => pr?.id === prId) || null : null;
 
   if (!token) {
     return (
@@ -2234,112 +2068,33 @@ function App() {
             </LoadingOverlay>
           ) : (
             <>
-              <PRSection>
-                <CollapsibleHeader onClick={() => toggleSectionExpanded('authored')}>
-                  <Caret data-expanded={expandedSections.authored.toString()}>▶</Caret>
-                  <SectionHeader>
-                    <PRCount data-has-items={prs.authored.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                      {prs.authored.filter(pr => !isDismissed(pr)).length}
-                    </PRCount>
-                    <h2>Your Pull Requests</h2>
-                    <InfoIcon onClick={(e) => e.stopPropagation()}>
-                      i
-                      <TooltipContainer>
-                        Pull requests that you have opened and are still open.
-                      </TooltipContainer>
-                    </InfoIcon>
-                  </SectionHeader>
-                </CollapsibleHeader>
-                <CollapsibleContent data-expanded={expandedSections.authored.toString()}>
-                  {renderPRTable(prs.authored, 'authored')}
-                </CollapsibleContent>
-              </PRSection>
+              {PR_SECTIONS.map(({ key, title, tooltip, teamColumn, lastReviewColumn }) => {
+                const visibleCount = prs[key].filter(pr => !isDismissed(pr)).length;
+                return (
+                  <PRSection key={key}>
+                    <CollapsibleHeader onClick={() => toggleSectionExpanded(key)}>
+                      <Caret data-expanded={expandedSections[key].toString()}>▶</Caret>
+                      <SectionHeader>
+                        <PRCount data-has-items={visibleCount > 0 ? "true" : "false"}>
+                          {visibleCount}
+                        </PRCount>
+                        <h2>{title}</h2>
+                        <InfoIcon onClick={(e) => e.stopPropagation()}>
+                          i
+                          <TooltipContainer>
+                            {tooltip}
+                          </TooltipContainer>
+                        </InfoIcon>
+                      </SectionHeader>
+                    </CollapsibleHeader>
+                    <CollapsibleContent data-expanded={expandedSections[key].toString()}>
+                      {renderPRTable(prs[key], key, !!teamColumn, !!lastReviewColumn)}
+                    </CollapsibleContent>
+                  </PRSection>
+                );
+              })}
 
-          <PRSection>
-            <CollapsibleHeader onClick={() => toggleSectionExpanded('directReview')}>
-              <Caret data-expanded={expandedSections.directReview.toString()}>▶</Caret>
-              <SectionHeader>
-                <PRCount data-has-items={prs.directReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                  {prs.directReview.filter(pr => !isDismissed(pr)).length}
-                </PRCount>
-                <h2>Needs Your Review</h2>
-                <InfoIcon onClick={(e) => e.stopPropagation()}>
-                  i
-                  <TooltipContainer>
-                    Open pull requests where you have been directly requested as a reviewer.
-                  </TooltipContainer>
-                </InfoIcon>
-              </SectionHeader>
-            </CollapsibleHeader>
-            <CollapsibleContent data-expanded={expandedSections.directReview.toString()}>
-              {renderPRTable(prs.directReview, 'directReview', false, true)}
-            </CollapsibleContent>
-          </PRSection>
-
-          <PRSection>
-            <CollapsibleHeader onClick={() => toggleSectionExpanded('teamReview')}>
-              <Caret data-expanded={expandedSections.teamReview.toString()}>▶</Caret>
-              <SectionHeader>
-                <PRCount data-has-items={prs.teamReview.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                  {prs.teamReview.filter(pr => !isDismissed(pr)).length}
-                </PRCount>
-                <h2>Team Reviews</h2>
-                <InfoIcon onClick={(e) => e.stopPropagation()}>
-                  i
-                  <TooltipContainer>
-                    Open pull requests where one of your teams has been requested to review.
-                  </TooltipContainer>
-                </InfoIcon>
-              </SectionHeader>
-            </CollapsibleHeader>
-            <CollapsibleContent data-expanded={expandedSections.teamReview.toString()}>
-              {renderPRTable(prs.teamReview, 'teamReview', true, true)}
-            </CollapsibleContent>
-          </PRSection>
-
-          <PRSection>
-            <CollapsibleHeader onClick={() => toggleSectionExpanded('mentioned')}>
-              <Caret data-expanded={expandedSections.mentioned.toString()}>▶</Caret>
-              <SectionHeader>
-                <PRCount data-has-items={prs.mentioned.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                  {prs.mentioned.filter(pr => !isDismissed(pr)).length}
-                </PRCount>
-                <h2>Mentioned</h2>
-                <InfoIcon onClick={(e) => e.stopPropagation()}>
-                  i
-                  <TooltipContainer>
-                    Open pull requests where you have been mentioned in the description or comments.
-                  </TooltipContainer>
-                </InfoIcon>
-              </SectionHeader>
-            </CollapsibleHeader>
-            <CollapsibleContent data-expanded={expandedSections.mentioned.toString()}>
-              {renderPRTable(prs.mentioned, 'mentioned')}
-            </CollapsibleContent>
-          </PRSection>
-
-          <PRSection>
-            <CollapsibleHeader onClick={() => toggleSectionExpanded('alreadyReviewed')}>
-              <Caret data-expanded={expandedSections.alreadyReviewed.toString()}>▶</Caret>
-              <SectionHeader>
-                <PRCount data-has-items={prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                  {prs.alreadyReviewed.filter(pr => !isDismissed(pr)).length}
-                </PRCount>
-                <h2>Already Reviewed</h2>
-                <InfoIcon onClick={(e) => e.stopPropagation()}>
-                  i
-                  <TooltipContainer>
-                    Pull requests that you've already reviewed but are still open.
-                  </TooltipContainer>
-                </InfoIcon>
-              </SectionHeader>
-            </CollapsibleHeader>
-            <CollapsibleContent data-expanded={expandedSections.alreadyReviewed.toString()}>
-              {renderPRTable(prs.alreadyReviewed, 'alreadyReviewed', false, true)}
-            </CollapsibleContent>
-          </PRSection>
-
-          {renderDismissedPRs()}
+              {renderDismissedPRs()}
             </>
           )
         } />
@@ -2354,36 +2109,18 @@ function App() {
       <DropdownPortal isOpen={openDismissDropdown !== null}>
         <DismissDropdownWrapper style={{ top: `${dropdownPosition.top}px`, left: `${dropdownPosition.left}px` }}>
           <DismissDropdown onClick={e => e.stopPropagation()}>
-            <DismissOption onClick={(e) => {
-              const pr = findPRById(openDismissDropdown);
-              if (pr) handleDismissOptionClick(e, pr, 'until-update');
-            }}>
-              Until next update
-            </DismissOption>
-            <DismissOption onClick={(e) => {
-              const pr = findPRById(openDismissDropdown);
-              if (pr) handleDismissOptionClick(e, pr, 'forever');
-            }}>
-              Forever
-            </DismissOption>
-            <DismissOption onClick={(e) => {
-              const pr = findPRById(openDismissDropdown);
-              if (pr) handleDismissOptionClick(e, pr, '1day');
-            }}>
-              For 1 day
-            </DismissOption>
-            <DismissOption onClick={(e) => {
-              const pr = findPRById(openDismissDropdown);
-              if (pr) handleDismissOptionClick(e, pr, '3days');
-            }}>
-              For 3 days
-            </DismissOption>
-            <DismissOption onClick={(e) => {
-              const pr = findPRById(openDismissDropdown);
-              if (pr) handleDismissOptionClick(e, pr, '7days');
-            }}>
-              For 7 days
-            </DismissOption>
+            {DISMISS_OPTIONS.map(option => (
+              <DismissOption
+                key={option.key}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const pr = findPRById(openDismissDropdown);
+                  if (pr) handleDismiss(pr, option);
+                }}
+              >
+                {option.label}
+              </DismissOption>
+            ))}
           </DismissDropdown>
         </DismissDropdownWrapper>
       </DropdownPortal>

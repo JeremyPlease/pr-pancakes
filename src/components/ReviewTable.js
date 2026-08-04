@@ -2,12 +2,9 @@ import React from 'react';
 import styled from 'styled-components';
 import dayjs from 'dayjs';
 import duration from 'dayjs/plugin/duration';
-import relativeTime from 'dayjs/plugin/relativeTime';
 import { calculateBusinessDaysMs } from '../analytics-utils';
 
-// Extend dayjs with plugins
 dayjs.extend(duration);
-dayjs.extend(relativeTime);
 
 const TableContainer = styled.div`
   background-color: #161b22;

@@ -68,7 +68,7 @@ const formatDuration = (milliseconds) => {
   }
 };
 
-const StatsCards = ({ data, dateRange, timezone, excludeWeekends }) => {
+const StatsCards = ({ data, dateRange, excludeWeekends }) => {
   // Calculate statistics from the raw data
   const calculateStats = () => {
     const stats = {

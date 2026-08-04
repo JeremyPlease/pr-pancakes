@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import dayjs from 'dayjs';
 
@@ -84,13 +84,13 @@ const DateRangePicker = ({ value, onChange, timezone }) => {
   const [customEnd, setCustomEnd] = useState(value.end.format('YYYY-MM-DD'));
 
   // Update custom date inputs when value changes from parent
-  React.useEffect(() => {
+  useEffect(() => {
     setCustomStart(value.start.format('YYYY-MM-DD'));
     setCustomEnd(value.end.format('YYYY-MM-DD'));
   }, [value.start, value.end]);
 
   // Detect which preset matches the current date range
-  React.useEffect(() => {
+  useEffect(() => {
     const now = dayjs().tz(timezone);
     const start = value.start;
     const end = value.end;
