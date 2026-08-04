@@ -1,23 +1,34 @@
-export async function onRequestGet(context) {
-  const env = context.env;
-  const url = new URL(context.request.url);
+const getCookie = (request, name) => {
+  const cookies = request.headers.get('Cookie') || '';
+  const match = cookies.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? match[1] : null;
+};
 
-  // Determine allowed origin based on environment
+// One-shot cookie: always cleared by whichever response ends the flow
+const CLEAR_STATE_COOKIE = 'oauth_state=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0';
+
+const errorResponse = (message, status) =>
+  new Response(message, {
+    status,
+    headers: { 'Set-Cookie': CLEAR_STATE_COOKIE }
+  });
+
+export async function onRequestGet(context) {
+  const url = new URL(context.request.url);
+  const env = context.env;
   const isLocal = url.hostname === 'localhost';
-  const allowedOrigin = isLocal ? 'http://localhost:3000' : 'https://prpancakes.com';
 
   try {
     const code = url.searchParams.get('code');
-
     if (!code) {
-      return new Response('Missing authorization code', {
-        status: 400,
-        headers: {
-          'Access-Control-Allow-Origin': allowedOrigin,
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        }
-      });
+      return errorResponse('Missing authorization code', 400);
+    }
+
+    // Verify the state we set when starting the flow (OAuth CSRF protection)
+    const returnedState = url.searchParams.get('state');
+    const expectedState = getCookie(context.request, 'oauth_state');
+    if (!expectedState || returnedState !== expectedState) {
+      return errorResponse('Invalid OAuth state. Please try signing in again.', 403);
     }
 
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
@@ -36,18 +47,13 @@ export async function onRequestGet(context) {
     const data = await tokenResponse.json();
 
     if (!data.access_token) {
-      return new Response('Failed to obtain access token', {
-        status: 400,
-        headers: {
-          'Access-Control-Allow-Origin': allowedOrigin,
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        }
-      });
+      return errorResponse('Failed to obtain access token', 400);
     }
 
-    // Instead of putting token in URL, create a secure callback page
-    // that safely transfers the token to localStorage using postMessage
+    // Hand the token to the SPA. In local dev the SPA runs on a different
+    // origin (localhost:3000), so localStorage isn't shared and the token
+    // rides a query param the app strips immediately; in production the SPA
+    // is same-origin, so localStorage set here is all that's needed.
     const callbackHtml = `
     <!DOCTYPE html>
     <html>
@@ -87,23 +93,18 @@ export async function onRequestGet(context) {
         (function() {
           const token = ${JSON.stringify(data.access_token)};
 
-          // Store token securely in localStorage and redirect to main app
           if (window.localStorage) {
             localStorage.setItem('github_token', token);
           }
 
-                    // Redirect to main app with token
-          const isLocal = window.location.href.includes('localhost:8788');
-          let redirectUrl;
-          if (isLocal) {
-            redirectUrl = 'http://localhost:3000?token=' + encodeURIComponent(token);
-          } else {
-            redirectUrl = 'https://prpancakes.com';
-          }
+          const isLocal = ${JSON.stringify(isLocal)};
+          const redirectUrl = isLocal
+            ? 'http://localhost:3000?token=' + encodeURIComponent(token)
+            : ${JSON.stringify(url.origin)};
 
           setTimeout(() => {
             window.location.href = redirectUrl;
-          }, 1500);
+          }, 1000);
         })();
       </script>
     </body>
@@ -114,20 +115,11 @@ export async function onRequestGet(context) {
       status: 200,
       headers: {
         'Content-Type': 'text/html',
-        'Access-Control-Allow-Origin': allowedOrigin,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Set-Cookie': CLEAR_STATE_COOKIE
       }
     });
   } catch (error) {
     console.error('Error during OAuth:', error);
-    return new Response('Authentication failed', {
-      status: 500,
-      headers: {
-        'Access-Control-Allow-Origin': allowedOrigin,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-    });
+    return errorResponse('Authentication failed', 500);
   }
 }
