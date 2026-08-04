@@ -8,6 +8,9 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import DateRangePicker from './DateRangePicker';
 import StatsCards from './StatsCards';
 import VelocityChart from './VelocityChart';
+import ResponseBreakdown from './ResponseBreakdown';
+import TopLists from './TopLists';
+import AuthoredAnalytics from './AuthoredAnalytics';
 import ReviewTable from './ReviewTable';
 import { isRateLimit, handleRateLimit, isBlocked } from '../simple-rate-limit';
 
@@ -98,6 +101,24 @@ const PageTitle = styled.h1`
   font-weight: 700;
 `;
 
+const SectionHeading = styled.div`
+  margin: 36px 0 16px;
+  padding-top: 24px;
+  border-top: 1px solid #21262d;
+
+  h2 {
+    color: #f0f6fc;
+    font-size: 1.15rem;
+    margin: 0;
+  }
+
+  p {
+    color: #8b949e;
+    font-size: 13px;
+    margin: 4px 0 0;
+  }
+`;
+
 // Slim single-row bar for the calculation toggles
 const OptionsSection = styled.div`
   display: flex;
@@ -166,7 +187,7 @@ const getInitialState = () => {
   return {
     loading: false,
     error: null,
-    rawData: [],
+    rawData: { reviewData: [], authoredData: [] },
     dateRange: {
       start: now.subtract(30, 'days').startOf('day'),
       end: now.endOf('day')
@@ -390,7 +411,79 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
         })
         .filter(pr => pr.reviewRequestEvents.length > 0); // Only include PRs where user was requested
 
-      dispatch({ type: 'SET_DATA', payload: processedData });
+      // ---- Authored PRs (your own work in the range) ----
+      // updated:START..END approximates "active in range": it catches PRs
+      // opened or merged in range for current-period views; only historical
+      // ranges can miss a PR that was updated again after the range ended.
+      const authoredQuery = `
+        query($searchQuery: String!, $after: String) {
+          search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            nodes {
+              ... on PullRequest {
+                id
+                state
+                createdAt
+                mergedAt
+                closedAt
+                additions
+                deletions
+                repository {
+                  nameWithOwner
+                }
+                reviews(first: 20) {
+                  nodes {
+                    author {
+                      login
+                    }
+                    submittedAt
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+
+      const authoredPRs = [];
+      let authoredHasNext = true;
+      let authoredCursor = null;
+      let authoredPages = 0;
+
+      while (authoredHasNext && authoredPages < 5) {
+        authoredPages++;
+        const authoredResult = await graphqlWithAuth(authoredQuery, {
+          searchQuery: `is:pr author:@me updated:${startDate}..${endDate}`,
+          after: authoredCursor
+        });
+
+        if (!authoredResult || !authoredResult.search) {
+          throw new Error('Invalid response from GitHub API');
+        }
+
+        authoredPRs.push(...authoredResult.search.nodes);
+        authoredHasNext = authoredResult.search.pageInfo.hasNextPage;
+        authoredCursor = authoredResult.search.pageInfo.endCursor;
+      }
+
+      if (authoredHasNext) {
+        console.warn('Stopped authored-PR pagination after 5 pages to avoid excessive API calls');
+      }
+
+      const authoredData = authoredPRs
+        .filter(pr => pr && pr.id)
+        .map(pr => {
+          const firstOtherReview = pr.reviews?.nodes
+            ?.filter(review => review.author?.login && review.author.login !== viewerLogin)
+            ?.sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt))[0];
+
+          return { ...pr, firstReviewAt: firstOtherReview ? firstOtherReview.submittedAt : null };
+        });
+
+      dispatch({ type: 'SET_DATA', payload: { reviewData: processedData, authoredData } });
 
     } catch (error) {
       console.error('Error fetching analytics data:', error);
@@ -430,18 +523,20 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
     dispatch({ type: 'SET_EXCLUDE_WEEKENDS', payload: event.target.checked });
   };
 
-  // Filter data based on includeTeamRequests option
+  // Review data with team requests optionally filtered out
   const filteredData = React.useMemo(() => {
-    if (!state.rawData || state.includeTeamRequests) {
-      return state.rawData;
+    const reviewData = state.rawData.reviewData || [];
+    if (state.includeTeamRequests) {
+      return reviewData;
     }
 
-    // Filter out team review requests when includeTeamRequests is false
-    return state.rawData.map(pr => ({
+    return reviewData.map(pr => ({
       ...pr,
       reviewRequestEvents: pr.reviewRequestEvents.filter(event => !event.isTeamRequest)
     })).filter(pr => pr.reviewRequestEvents.length > 0); // Remove PRs with no remaining review requests
   }, [state.rawData, state.includeTeamRequests]);
+
+  const authoredData = state.rawData.authoredData || [];
 
   if (state.error) {
     return (
@@ -490,21 +585,25 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
         </CheckboxContainer>
       </OptionsSection>
 
-      {filteredData.length === 0 && !state.loading ? (
+      {filteredData.length === 0 && authoredData.length === 0 && !state.loading ? (
         <EmptyState>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>📈</div>
           <div style={{ fontSize: '18px', marginBottom: '8px' }}>No analytics data available</div>
           <div style={{ fontSize: '14px' }}>
-            Try selecting a different date range or check if you have any review requests in the selected period.
+            Try selecting a different date range or check if you have any PR activity in the selected period.
           </div>
         </EmptyState>
       ) : (
         <>
+          <SectionHeading>
+            <h2>🍳 Your Reviewing</h2>
+            <p>How you keep other people's PRs moving.</p>
+          </SectionHeading>
+
           <StatsCards
             data={filteredData}
             dateRange={state.dateRange}
             excludeWeekends={state.excludeWeekends}
-            timezone={userTimezone}
           />
 
           <VelocityChart
@@ -515,6 +614,35 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
             excludeWeekends={state.excludeWeekends}
             timezone={userTimezone}
           />
+
+          <ResponseBreakdown
+            data={filteredData}
+            dateRange={state.dateRange}
+            excludeWeekends={state.excludeWeekends}
+            timezone={userTimezone}
+          />
+
+          <TopLists
+            data={filteredData}
+            dateRange={state.dateRange}
+          />
+
+          <SectionHeading>
+            <h2>🥞 Your Pull Requests</h2>
+            <p>How your own PRs fare once they hit the griddle.</p>
+          </SectionHeading>
+
+          <AuthoredAnalytics
+            data={authoredData}
+            dateRange={state.dateRange}
+            excludeWeekends={state.excludeWeekends}
+            timezone={userTimezone}
+          />
+
+          <SectionHeading>
+            <h2>📋 The Receipts</h2>
+            <p>Every review request in range, one row at a time.</p>
+          </SectionHeading>
 
           <ReviewTable
             data={filteredData}
