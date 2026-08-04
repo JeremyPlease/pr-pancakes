@@ -66,6 +66,17 @@ const Label = styled.label`
   font-weight: 500;
 `;
 
+// Row for calculation toggles passed in by the parent
+const TogglesRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #21262d;
+`;
+
 const PRESETS = [
   { key: 'today', label: 'Today', days: 0 },
   { key: 'last7', label: 'Last 7 Days', days: 7 },
@@ -77,7 +88,7 @@ const PRESETS = [
   { key: 'custom', label: 'Custom', isCustom: true }
 ];
 
-const DateRangePicker = ({ value, onChange, timezone }) => {
+const DateRangePicker = ({ value, onChange, timezone, children }) => {
   const [activePreset, setActivePreset] = useState('last30');
   const [customStart, setCustomStart] = useState(value.start.format('YYYY-MM-DD'));
   const [customEnd, setCustomEnd] = useState(value.end.format('YYYY-MM-DD'));
@@ -260,6 +271,8 @@ const DateRangePicker = ({ value, onChange, timezone }) => {
           </div>
         </CustomDateContainer>
       )}
+
+      {children && <TogglesRow>{children}</TogglesRow>}
     </DateRangeContainer>
   );
 };

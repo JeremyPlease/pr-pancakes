@@ -119,18 +119,6 @@ const SectionHeading = styled.div`
   }
 `;
 
-// Slim single-row bar for the calculation toggles
-const OptionsSection = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 28px;
-  background-color: #161b22;
-  border-radius: 10px;
-  padding: 12px 20px;
-  margin-bottom: 24px;
-`;
-
 const CheckboxContainer = styled.label`
   display: flex;
   align-items: center;
@@ -564,9 +552,7 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
         value={state.dateRange}
         onChange={handleDateRangeChange}
         timezone={userTimezone}
-      />
-
-      <OptionsSection>
+      >
         <CheckboxContainer>
           <Checkbox
             type="checkbox"
@@ -583,7 +569,7 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
           />
           Exclude weekends from calculation
         </CheckboxContainer>
-      </OptionsSection>
+      </DateRangePicker>
 
       {filteredData.length === 0 && authoredData.length === 0 && !state.loading ? (
         <EmptyState>

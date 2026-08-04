@@ -13,6 +13,26 @@ const TableContainer = styled.div`
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 `;
 
+// Wide tables scroll inside the card instead of stretching the page
+const TableScroll = styled.div`
+  overflow-x: auto;
+  border-radius: 8px;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #1c2128;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 4px;
+  }
+`;
+
 const TableHeader = styled.h3`
   color: #f0c46c;
   margin: 0 0 20px 0;
@@ -254,6 +274,7 @@ const ReviewTable = ({ data, dateRange, page, onPageChange, timezone, excludeWee
     <TableContainer>
       <TableHeader>📋 Review Request Details</TableHeader>
 
+      <TableScroll>
       <Table>
         <thead>
           <tr>
@@ -301,6 +322,7 @@ const ReviewTable = ({ data, dateRange, page, onPageChange, timezone, excludeWee
           ))}
         </tbody>
       </Table>
+      </TableScroll>
 
       <PaginationContainer>
         <PaginationInfo>
