@@ -327,7 +327,7 @@ const Header = styled.header`
   top: 0;
   z-index: 100;
   margin-bottom: 24px;
-  background: rgba(13, 17, 23, 0.92);
+  background: rgba(13, 17, 23, 0.7);
   backdrop-filter: blur(8px);
 
   /* Syrup drizzle underline */
