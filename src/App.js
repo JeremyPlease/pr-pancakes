@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { graphql } from '@octokit/graphql';
 import { formatDistanceToNow, addDays } from 'date-fns';
 import { initializeAuth, getAuthUrl, getToken, clearToken } from './auth';
 import { isRateLimit, handleRateLimit, resetRateLimit, isBlocked, getSecondsUntilRetry } from './simple-rate-limit';
+import AnalyticsView from './components/AnalyticsView';
 
 const Container = styled.div`
   margin: 0 auto;
@@ -475,6 +477,44 @@ const LogoutButton = styled.button`
   }
 `;
 
+const NavButton = styled(Link)`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  padding: 8px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+
+  &.active {
+    background: #f0c46c;
+    color: #0d1117;
+    border-color: #f0c46c;
+  }
+
+  &:hover {
+    background: #30363d;
+    border-color: #8b949e;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  &.active:hover {
+    background: #f8d68e;
+    border-color: #f8d68e;
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+`;
+
 const RefreshIcon = () => (
   <svg
     width="16"
@@ -917,6 +957,7 @@ const RateLimitNotification = styled.div`
 
 function App() {
   const [token, setToken] = useState(getToken());
+  const location = useLocation();
   const [prs, setPRs] = useState({
     authored: [],
     directReview: [],
@@ -1548,10 +1589,11 @@ function App() {
     }
   }, [token, fetchPRs]);
 
-  // Add window focus event listener to refresh PRs when returning to the page
+  // Refresh PRs when returning to the page, but only while on the dashboard —
+  // the analytics view manages its own data.
   useEffect(() => {
     const handleWindowFocus = () => {
-      if (token) {
+      if (token && location.pathname === '/') {
         fetchPRs(true); // Pass true to indicate this is a background refresh
       }
     };
@@ -1560,11 +1602,9 @@ function App() {
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
     };
-  }, [token, fetchPRs]);
+  }, [token, fetchPRs, location.pathname]);
 
-
-
-    const handleLogin = () => {
+  const handleLogin = () => {
     // Clear any existing token before redirecting
     clearToken();
     window.location.href = getAuthUrl();
@@ -2117,13 +2157,21 @@ function App() {
       <Header>
         <h1>PR Pancakes</h1>
         <div className="header-buttons">
-          <RefreshButton
-            onClick={handleRefresh}
-            disabled={loading || backgroundRefreshing}
-            data-loading={loading || backgroundRefreshing}
-          >
-            <RefreshIcon /> {loading ? 'Refreshing...' : backgroundRefreshing ? 'Refreshing...' : 'Refresh PRs'}
-          </RefreshButton>
+          <NavButton to="/" className={location.pathname === '/' ? 'active' : ''}>
+            📋 PR Dashboard
+          </NavButton>
+          <NavButton to="/analytics" className={location.pathname === '/analytics' ? 'active' : ''}>
+            📈 Analytics
+          </NavButton>
+          {location.pathname === '/' && (
+            <RefreshButton
+              onClick={handleRefresh}
+              disabled={loading || backgroundRefreshing}
+              data-loading={loading || backgroundRefreshing}
+            >
+              <RefreshIcon /> {loading ? 'Refreshing...' : backgroundRefreshing ? 'Refreshing...' : 'Refresh PRs'}
+            </RefreshButton>
+          )}
           <LogoutButton onClick={handleLogout}>
             <LogoutIcon />
           </LogoutButton>
@@ -2143,33 +2191,35 @@ function App() {
         </RateLimitNotification>
       )}
 
-      {loading ? (
-        <LoadingOverlay>
-          <LoadingSpinner />
-          <div>Flipping Pull Request Pancakes... 🥞</div>
-        </LoadingOverlay>
-      ) : (
-        <>
-          <PRSection>
-            <CollapsibleHeader onClick={() => toggleSectionExpanded('authored')}>
-              <Caret data-expanded={expandedSections.authored.toString()}>▶</Caret>
-              <SectionHeader>
-                <PRCount data-has-items={prs.authored.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
-                  {prs.authored.filter(pr => !isDismissed(pr)).length}
-                </PRCount>
-                <h2>Your Pull Requests</h2>
-                <InfoIcon onClick={(e) => e.stopPropagation()}>
-                  i
-                  <TooltipContainer>
-                    Pull requests that you have opened and are still open.
-                  </TooltipContainer>
-                </InfoIcon>
-              </SectionHeader>
-            </CollapsibleHeader>
-            <CollapsibleContent data-expanded={expandedSections.authored.toString()}>
-              {renderPRTable(prs.authored, 'authored')}
-            </CollapsibleContent>
-          </PRSection>
+      <Routes>
+        <Route path="/" element={
+          loading ? (
+            <LoadingOverlay>
+              <LoadingSpinner />
+              <div>Flipping Pull Request Pancakes... 🥞</div>
+            </LoadingOverlay>
+          ) : (
+            <>
+              <PRSection>
+                <CollapsibleHeader onClick={() => toggleSectionExpanded('authored')}>
+                  <Caret data-expanded={expandedSections.authored.toString()}>▶</Caret>
+                  <SectionHeader>
+                    <PRCount data-has-items={prs.authored.filter(pr => !isDismissed(pr)).length > 0 ? "true" : "false"}>
+                      {prs.authored.filter(pr => !isDismissed(pr)).length}
+                    </PRCount>
+                    <h2>Your Pull Requests</h2>
+                    <InfoIcon onClick={(e) => e.stopPropagation()}>
+                      i
+                      <TooltipContainer>
+                        Pull requests that you have opened and are still open.
+                      </TooltipContainer>
+                    </InfoIcon>
+                  </SectionHeader>
+                </CollapsibleHeader>
+                <CollapsibleContent data-expanded={expandedSections.authored.toString()}>
+                  {renderPRTable(prs.authored, 'authored')}
+                </CollapsibleContent>
+              </PRSection>
 
           <PRSection>
             <CollapsibleHeader onClick={() => toggleSectionExpanded('directReview')}>
@@ -2256,8 +2306,16 @@ function App() {
           </PRSection>
 
           {renderDismissedPRs()}
-        </>
-      )}
+            </>
+          )
+        } />
+        <Route path="/analytics" element={
+          <AnalyticsView
+            token={token}
+            onTokenExpired={handleTokenExpiration}
+          />
+        } />
+      </Routes>
 
       <DropdownPortal isOpen={openDismissDropdown !== null}>
         <DismissDropdownWrapper style={{ top: `${dropdownPosition.top}px`, left: `${dropdownPosition.left}px` }}>
