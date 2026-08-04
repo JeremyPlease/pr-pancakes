@@ -17,9 +17,7 @@ dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 
 const AnalyticsContainer = styled.div`
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+  padding: 4px 0 20px;
 `;
 
 const LoadingPill = styled.div`

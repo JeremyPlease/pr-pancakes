@@ -43,8 +43,7 @@ const LoginButton = styled.button`
 `;
 
 const PRSection = styled.div`
-max-width: 1200px;
-  margin: 24px auto;
+  margin: 0 0 24px;
   background-color: #161b22;
   border-radius: 10px;
   padding: 20px;
@@ -251,7 +250,6 @@ const LoadingSpinner = styled.div`
 `;
 
 const LoadingOverlay = styled.div`
-  max-width: 1200px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -261,73 +259,55 @@ const LoadingOverlay = styled.div`
   gap: 16px;
   background-color: #161b22;
   border-radius: 10px;
-  margin: 24px auto;
+  margin: 0 0 24px;
 `;
 
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 32px;
-  padding: 8px 0;
-  position: relative;
-  background: linear-gradient(to right, rgba(240, 196, 108, 0.05), rgba(240, 196, 108, 0.1), rgba(240, 196, 108, 0.05));
-  padding-left: calc((100vw - 1200px) / 2);
-  padding-right: calc((100vw - 1200px) / 2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+const Header = styled.header`
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  margin-bottom: 24px;
+  background: rgba(13, 17, 23, 0.92);
+  backdrop-filter: blur(8px);
 
-  /* Add subtle background pattern */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image:
-      radial-gradient(circle at 25% 25%, rgba(240, 196, 108, 0.05) 2%, transparent 2.5%),
-      radial-gradient(circle at 75% 75%, rgba(240, 196, 108, 0.05) 2%, transparent 2.5%);
-    background-size: 24px 24px;
-    border-radius: 16px;
-    opacity: 0.8;
-    z-index: 0;
-  }
-
-  /* Create a gradient border bottom */
+  /* Syrup drizzle underline */
   &::after {
     content: '';
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #f0c46c 0%, #f8d68e 50%, #f0c46c 100%);
-    border-radius: 3px;
-    box-shadow: 0 1px 3px rgba(240, 196, 108, 0.3);
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, #f0c46c 15%, #f8d68e 50%, #f0c46c 85%, transparent 100%);
+  }
+
+  .header-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
   }
 
   h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
     margin: 0;
-    color: #f0c46c;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     font-weight: 800;
     letter-spacing: -0.5px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    position: relative;
     background: linear-gradient(to right, #f0c46c, #f8d68e, #f0c46c);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    z-index: 1;
+    white-space: nowrap;
 
-    /* Add a subtle glow effect */
     &::before {
       content: '🥞';
-      font-size: 3rem;
-      margin-right: 8px;
+      font-size: 2rem;
       filter: drop-shadow(0 0 8px rgba(240, 196, 108, 0.4));
       animation: float 3s ease-in-out infinite;
       -webkit-text-fill-color: initial;
@@ -335,51 +315,56 @@ const Header = styled.div`
 
     @keyframes float {
       0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-5px); }
+      50% { transform: translateY(-4px); }
     }
   }
 
-  /* Ensure buttons are above the pattern */
   .header-buttons {
     display: flex;
     align-items: center;
-    gap: 12px;
-    position: relative;
-    z-index: 1;
+    gap: 10px;
   }
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    gap: 16px;
+    /* The stacked header is too tall to pin on small screens */
+    position: static;
 
-    h1 {
-      font-size: 2.4rem;
+    .header-inner {
+      flex-direction: column;
+      gap: 12px;
     }
 
     .header-buttons {
       width: 100%;
       justify-content: center;
+      flex-wrap: wrap;
     }
   }
+`;
+
+// Constrains page content to the same width as the header
+const Main = styled.main`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 24px;
 `;
 
 const RefreshButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: linear-gradient(to bottom, #f8d68e, #f0c46c);
   color: #0d1117;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 12px;
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 15px;
-  font-weight: bold;
+  font-size: 14px;
+  font-weight: 600;
   transition: all 0.2s ease-in-out;
-  box-shadow: 0 4px 12px rgba(240, 196, 108, 0.3), 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(240, 196, 108, 0.25);
   position: relative;
   overflow: hidden;
-  letter-spacing: 0.5px;
 
   /* Add subtle shine effect */
   &::after {
@@ -401,8 +386,8 @@ const RefreshButton = styled.button`
 
   &:hover {
     background: linear-gradient(to bottom, #f9dea0, #f8d68e);
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 8px 15px rgba(240, 196, 108, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(240, 196, 108, 0.35);
 
     &::after {
       transform: rotate(30deg) translate(50%, 50%);
@@ -410,8 +395,8 @@ const RefreshButton = styled.button`
   }
 
   &:active {
-    transform: translateY(1px) scale(0.98);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
   &:disabled {
@@ -692,8 +677,8 @@ const EmptyStateMessage = styled.div`
 
 const Footer = styled.footer`
   margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid #30363d;
+  padding: 20px 0 28px;
+  border-top: 1px solid #21262d;
   text-align: center;
   color: #8b949e;
   font-size: 14px;
@@ -705,6 +690,12 @@ const Footer = styled.footer`
     &:hover {
       text-decoration: underline;
     }
+  }
+
+  .tagline {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6e7681;
   }
 `;
 
@@ -2023,26 +2014,28 @@ function App() {
   return (
     <Container>
       <Header>
-        <h1>PR Pancakes</h1>
-        <div className="header-buttons">
-          <NavButton to="/" className={location.pathname === '/' ? 'active' : ''}>
-            📋 PR Dashboard
-          </NavButton>
-          <NavButton to="/analytics" className={location.pathname === '/analytics' ? 'active' : ''}>
-            📈 Analytics
-          </NavButton>
-          {location.pathname === '/' && (
-            <RefreshButton
-              onClick={handleRefresh}
-              disabled={loading || backgroundRefreshing}
-              data-loading={loading || backgroundRefreshing}
-            >
-              <RefreshIcon /> {loading ? 'Refreshing...' : backgroundRefreshing ? 'Refreshing...' : 'Refresh PRs'}
-            </RefreshButton>
-          )}
-          <LogoutButton onClick={handleLogout}>
-            <LogoutIcon />
-          </LogoutButton>
+        <div className="header-inner">
+          <h1>PR Pancakes</h1>
+          <div className="header-buttons">
+            <NavButton to="/" className={location.pathname === '/' ? 'active' : ''}>
+              📋 PR Dashboard
+            </NavButton>
+            <NavButton to="/analytics" className={location.pathname === '/analytics' ? 'active' : ''}>
+              📈 Analytics
+            </NavButton>
+            {location.pathname === '/' && (
+              <RefreshButton
+                onClick={handleRefresh}
+                disabled={loading || backgroundRefreshing}
+                data-loading={loading || backgroundRefreshing}
+              >
+                <RefreshIcon /> {loading ? 'Refreshing...' : backgroundRefreshing ? 'Refreshing...' : 'Refresh PRs'}
+              </RefreshButton>
+            )}
+            <LogoutButton onClick={handleLogout} title="Log out">
+              <LogoutIcon />
+            </LogoutButton>
+          </div>
         </div>
       </Header>
 
@@ -2059,6 +2052,7 @@ function App() {
         </RateLimitNotification>
       )}
 
+      <Main>
       <Routes>
         <Route path="/" element={
           loading ? (
@@ -2105,6 +2099,7 @@ function App() {
           />
         } />
       </Routes>
+      </Main>
 
       <DropdownPortal isOpen={openDismissDropdown !== null}>
         <DismissDropdownWrapper style={{ top: `${dropdownPosition.top}px`, left: `${dropdownPosition.left}px` }}>
@@ -2127,6 +2122,7 @@ function App() {
 
       <Footer>
         <p>🥞 PR Pancakes | <a href="https://prpancakes.com" target="_blank" rel="noopener noreferrer">prpancakes.com</a> | <a href="https://github.com/jeremyplease/pr-pancakes" target="_blank" rel="noopener noreferrer"><GitHubIcon />GitHub</a></p>
+        <p className="tagline">Serving your pull requests hot off the griddle.</p>
       </Footer>
     </Container>
   );
