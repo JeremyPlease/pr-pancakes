@@ -155,7 +155,7 @@ const Th = styled.th`
 `;
 
 const Td = styled.td`
-  padding: 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid #21262d;
   font-size: 14px;
   color: #c9d1d9;
@@ -170,12 +170,71 @@ const PRAuthor = styled.span`
   color: #8b949e;
 `;
 
-const CommentCount = styled.span`
+// "repo #123" reference: dim repo, gold number
+const RepoRef = styled.span`
+  white-space: nowrap;
+
+  .repo {
+    color: #8b949e;
+  }
+
+  .num {
+    color: #f0c46c;
+    font-weight: 600;
+  }
+`;
+
+// Clamp long PR titles to two lines
+const PRTitle = styled.div`
+  color: #e6edf3;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 420px;
+`;
+
+// Small numeric pill; dims to a dash-like faint number at zero
+const CountBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #8b949e;
+  justify-content: center;
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(240, 196, 108, 0.15);
+  color: #f0c46c;
+
+  &[data-zero="true"] {
+    background: none;
+    color: #484f58;
+    font-weight: 400;
+  }
 `;
+
+// Ages get louder as PRs go stale
+const AgeText = styled.span`
+  white-space: nowrap;
+
+  &[data-staleness="stale"] {
+    color: #d29922;
+  }
+
+  &[data-staleness="ancient"] {
+    color: #f85149;
+  }
+`;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const getStaleness = (dateString) => {
+  const ageDays = (Date.now() - new Date(dateString).getTime()) / DAY_MS;
+  if (ageDays > 90) return 'ancient';
+  if (ageDays > 30) return 'stale';
+  return 'fresh';
+};
 
 const ClickableRow = styled.tr`
   cursor: pointer;
@@ -819,15 +878,11 @@ const PRCount = styled.span`
     }
   }
 
-  /* Pulse animation when count is greater than 0 */
-  @keyframes subtle-pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-  }
-
-  &[data-has-items="true"] {
-    animation: subtle-pulse 2s infinite ease-in-out;
+  /* Empty sections fade their counter into the background */
+  &[data-has-items="false"] {
+    background-color: #30363d;
+    color: #8b949e;
+    box-shadow: none;
   }
 `;
 
@@ -1771,7 +1826,7 @@ function App() {
       .filter(pr => !isDismissed(pr));
 
     if (filteredPRs.length === 0) {
-      return <EmptyStateMessage>🎉 No PRs here!</EmptyStateMessage>;
+      return <EmptyStateMessage>🥞 Nothing on this plate — all clear!</EmptyStateMessage>;
     }
 
     return (
@@ -1855,9 +1910,14 @@ function App() {
                 onClick={(e) => handleRowClick(pr.url, e)}
                 data-active={activeButtonId === pr.id}
               >
-                <ClickableTd>{pr.repository.name}#{pr.number}</ClickableTd>
                 <ClickableTd>
-                  {pr.title} (#{pr.number})
+                  <RepoRef>
+                    <span className="repo">{pr.repository.name}</span>
+                    <span className="num">#{pr.number}</span>
+                  </RepoRef>
+                </ClickableTd>
+                <ClickableTd>
+                  <PRTitle title={pr.title}>{pr.title}</PRTitle>
                 </ClickableTd>
                 <ClickableTd>
                   <PRAuthor>{pr.author.login}</PRAuthor>
@@ -1867,23 +1927,33 @@ function App() {
                     {pr.teamNames.join(', ')}
                   </ClickableTd>
                 )}
-                <ClickableTd>{formatDistanceToNow(new Date(pr.createdAt))} ago</ClickableTd>
-                <ClickableTd>{formatDistanceToNow(new Date(pr.updatedAt))} ago</ClickableTd>
+                <ClickableTd>
+                  <AgeText data-staleness={getStaleness(pr.createdAt)}>
+                    {formatDistanceToNow(new Date(pr.createdAt))} ago
+                  </AgeText>
+                </ClickableTd>
+                <ClickableTd>
+                  <AgeText>{formatDistanceToNow(new Date(pr.updatedAt))} ago</AgeText>
+                </ClickableTd>
                 {section === 'authored' && (
-                  <ClickableTd>
+                  <ClickableTd style={{ whiteSpace: 'nowrap' }}>
                     {pr.reviewCounts.approved > 0 && `✅ ${pr.reviewCounts.approved} `}
                     {pr.reviewCounts.commented > 0 && `💬 ${pr.reviewCounts.commented} `}
                     {pr.reviewCounts.changes > 0 && `❌ ${pr.reviewCounts.changes} `}
                     {pr.reviewCounts.pending > 0 && `🟠 ${pr.reviewCounts.pending}`}
-                    {!pr.reviewCounts.approved && !pr.reviewCounts.commented && !pr.reviewCounts.changes && !pr.reviewCounts.pending && '-'}
+                    {!pr.reviewCounts.approved && !pr.reviewCounts.commented && !pr.reviewCounts.changes && !pr.reviewCounts.pending && '–'}
                   </ClickableTd>
                 )}
                 <ClickableTd>
-                  <CommentCount>
+                  <CountBadge data-zero={(pr.totalComments === 0).toString()}>
                     {pr.totalComments}
-                  </CommentCount>
+                  </CountBadge>
                 </ClickableTd>
-                <ClickableTd>{pr.unresolvedThreads}</ClickableTd>
+                <ClickableTd>
+                  <CountBadge data-zero={(pr.unresolvedThreads === 0).toString()}>
+                    {pr.unresolvedThreads}
+                  </CountBadge>
+                </ClickableTd>
                 {includeLastReviewColumn && <ClickableTd>{pr.lastReview}</ClickableTd>}
                 <Td style={{ position: 'relative' }}>
                   <DismissButton
