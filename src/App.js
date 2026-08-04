@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
@@ -1044,11 +1044,17 @@ function App() {
     }
   }, []);
 
+  const dismissedPRsHydrated = useRef(false);
+
   useEffect(() => {
-    // Only save to localStorage if dismissedPRs is not empty or if it has been explicitly modified
-    if (Object.keys(dismissedPRs).length > 0) {
-      localStorage.setItem('dismissedPRs', JSON.stringify(dismissedPRs));
+    // Skip the initial mount run so the pre-hydration empty state doesn't
+    // wipe stored dismissals; after that, save every change — including an
+    // empty object, so removing the last dismissal persists.
+    if (!dismissedPRsHydrated.current) {
+      dismissedPRsHydrated.current = true;
+      return;
     }
+    localStorage.setItem('dismissedPRs', JSON.stringify(dismissedPRs));
   }, [dismissedPRs]);
 
   // Save expanded sections state to localStorage
@@ -1558,6 +1564,27 @@ function App() {
         mentioned: mentionedPRs,
         alreadyReviewed: alreadyReviewedPRs
       });
+
+      // All searches above are is:open, so a merged/closed PR disappears from
+      // the results — drop its dismissal so it doesn't sit in the Dismissed
+      // section indefinitely. Skip pruning if any search may be truncated by
+      // the 100-result cap, since absence then wouldn't prove the PR closed.
+      const rawSearchResults = [
+        result.authoredPRs?.nodes || [],
+        result.reviewRequestedPRs?.nodes || [],
+        result.mentionedPRs?.nodes || [],
+        result.alreadyReviewedPRs?.nodes || []
+      ];
+      if (rawSearchResults.every(nodes => nodes.length < 100)) {
+        const openPRIds = new Set(rawSearchResults.flat().map(pr => pr.id));
+        setDismissedPRs(prev => {
+          const staleIds = Object.keys(prev).filter(id => !openPRIds.has(id));
+          if (staleIds.length === 0) return prev;
+          const next = { ...prev };
+          staleIds.forEach(id => delete next[id]);
+          return next;
+        });
+      }
 
       // Reset rate limiting on successful request
       resetRateLimit();
