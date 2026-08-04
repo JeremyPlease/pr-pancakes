@@ -460,40 +460,104 @@ const RefreshIconButton = styled.button`
 `;
 
 
-const LogoutButton = styled.button`
+const UserMenuWrapper = styled.div`
+  position: relative;
+`;
+
+const AvatarButton = styled.button`
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #30363d;
+  background: #21262d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+
+  &:hover,
+  &[data-open="true"] {
+    border-color: #f0c46c;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+  }
+
+  .fallback {
+    font-size: 15px;
+    line-height: 1;
+  }
+`;
+
+const UserMenu = styled.div`
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 190px;
+  background-color: #1c2128;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 6px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 200;
+  animation: menuAppear 0.15s ease;
+
+  @keyframes menuAppear {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .signed-in {
+    padding: 8px 16px 10px;
+    font-size: 12px;
+    color: #8b949e;
+    border-bottom: 1px solid #21262d;
+    margin-bottom: 4px;
+
+    strong {
+      display: block;
+      color: #e6edf3;
+      font-size: 13px;
+      margin-top: 2px;
+    }
+  }
+`;
+
+const UserMenuItem = styled.button`
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #21262d;
-  color: #c9d1d9;
-  border: 1px solid #30363d;
+  width: 100%;
+  text-align: left;
   padding: 8px 16px;
-  border-radius: 8px;
+  background: none;
+  border: none;
+  color: #c9d1d9;
+  font-size: 13px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.15s ease;
 
   &:hover {
-    background: #30363d;
-    border-color: #8b949e;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  }
-
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    background-color: #f0c46c;
+    color: #0d1117;
   }
 
   svg {
-    width: 16px;
-    height: 16px;
-    transition: transform 0.2s ease;
-  }
-
-  &:hover svg {
-    transform: translateX(2px);
+    width: 14px;
+    height: 14px;
   }
 `;
 
@@ -1090,6 +1154,10 @@ function App() {
   });
   const [dismissedPRs, setDismissedPRs] = useState({});
   const [openDismissDropdown, setOpenDismissDropdown] = useState(null);
+  // Authed GitHub user (login + avatar); cached so the avatar shows
+  // immediately on reload instead of waiting for the first fetch
+  const [viewer, setViewer] = useState(safeParseJSON('viewerInfo', null));
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     authored: safeParseJSON('sectionExpanded_authored', true),
     directReview: safeParseJSON('sectionExpanded_directReview', true),
@@ -1154,6 +1222,20 @@ function App() {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [openDismissDropdown]);
+
+  // Close the user menu on any outside click
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.user-menu')) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [userMenuOpen]);
 
   // Add scroll and resize event handlers to update dropdown position
   useEffect(() => {
@@ -1239,6 +1321,7 @@ function App() {
         query {
           viewer {
             login
+            avatarUrl
             organizations(first: 10) {
               nodes {
                 teams(first: 10) {
@@ -1354,6 +1437,12 @@ function App() {
 
       // If result is null (due to auth error), exit early
       if (result === null) return;
+
+      if (result.viewer?.login) {
+        const viewerInfo = { login: result.viewer.login, avatarUrl: result.viewer.avatarUrl };
+        setViewer(viewerInfo);
+        localStorage.setItem('viewerInfo', JSON.stringify(viewerInfo));
+      }
 
       const userTeams = result.viewer?.organizations?.nodes
         .filter(org => org?.teams)
@@ -1746,6 +1835,9 @@ function App() {
     clearToken();
     // Reset all state to initial values
     setToken(null);
+    setUserMenuOpen(false);
+    setViewer(null);
+    localStorage.removeItem('viewerInfo');
     setPRs({
       authored: [],
       directReview: [],
@@ -2077,9 +2169,32 @@ function App() {
             <NavButton to="/analytics" className={location.pathname === '/analytics' ? 'active' : ''}>
               📈 Analytics
             </NavButton>
-            <LogoutButton onClick={handleLogout} title="Log out">
-              <LogoutIcon />
-            </LogoutButton>
+            <UserMenuWrapper className="user-menu">
+              <AvatarButton
+                onClick={() => setUserMenuOpen(open => !open)}
+                data-open={userMenuOpen.toString()}
+                title={viewer?.login || 'Account'}
+                aria-label="Account menu"
+                aria-expanded={userMenuOpen}
+              >
+                {viewer?.avatarUrl
+                  ? <img src={viewer.avatarUrl} alt={viewer.login} />
+                  : <span className="fallback">🥞</span>}
+              </AvatarButton>
+              {userMenuOpen && (
+                <UserMenu>
+                  {viewer?.login && (
+                    <div className="signed-in">
+                      Signed in as
+                      <strong>{viewer.login}</strong>
+                    </div>
+                  )}
+                  <UserMenuItem onClick={handleLogout}>
+                    <LogoutIcon /> Log out
+                  </UserMenuItem>
+                </UserMenu>
+              )}
+            </UserMenuWrapper>
           </div>
         </div>
       </Header>
