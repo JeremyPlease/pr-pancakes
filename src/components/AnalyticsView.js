@@ -91,19 +91,23 @@ const ErrorMessage = styled.div`
   text-align: center;
 `;
 
-const OptionsSection = styled.div`
-  background-color: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  padding: 16px;
-  margin: 24px 0;
+const PageTitle = styled.h1`
+  color: #f0c46c;
+  margin: 0 0 20px;
+  font-size: 1.4rem;
+  font-weight: 700;
 `;
 
-const OptionsTitle = styled.h3`
-  color: #f0f6fc;
-  margin: 0 0 12px 0;
-  font-size: 16px;
-  font-weight: 600;
+// Slim single-row bar for the calculation toggles
+const OptionsSection = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  background-color: #161b22;
+  border-radius: 10px;
+  padding: 12px 20px;
+  margin-bottom: 24px;
 `;
 
 const CheckboxContainer = styled.label`
@@ -442,9 +446,7 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
   if (state.error) {
     return (
       <AnalyticsContainer>
-        <h1 style={{ color: '#f0c46c', marginBottom: '32px', fontSize: '2rem' }}>
-          📈 PR Review Analytics
-        </h1>
+        <PageTitle>📈 PR Review Analytics</PageTitle>
         <ErrorMessage>
           Error loading analytics: {state.error}
         </ErrorMessage>
@@ -461,9 +463,7 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
         </LoadingPill>
       )}
 
-      <h1 style={{ color: '#f0c46c', marginBottom: '32px', fontSize: '2rem' }}>
-        📈 PR Review Analytics
-      </h1>
+      <PageTitle>📈 PR Review Analytics</PageTitle>
 
       <DateRangePicker
         value={state.dateRange}
@@ -472,7 +472,6 @@ const AnalyticsView = ({ token, onTokenExpired }) => {
       />
 
       <OptionsSection>
-        <OptionsTitle>Options</OptionsTitle>
         <CheckboxContainer>
           <Checkbox
             type="checkbox"

@@ -17,32 +17,31 @@ const StatsContainer = styled.div`
 const StatCard = styled.div`
   background-color: #161b22;
   border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border: 1px solid #30363d;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
-  }
+  padding: 18px 20px;
+  border: 1px solid #21262d;
 `;
 
 const StatTitle = styled.h3`
   color: #8b949e;
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 `;
 
+// Hero numbers wear text ink; color is reserved for status (missed > 0)
 const StatValue = styled.div`
-  color: #f0c46c;
-  font-size: 2.5rem;
+  color: #f0f6fc;
+  font-size: 2rem;
   font-weight: 700;
   margin: 0;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+
+  &[data-status="serious"] {
+    color: #f85149;
+  }
 `;
 
 const StatSubtext = styled.div`
@@ -148,7 +147,8 @@ const StatsCards = ({ data, dateRange, excludeWeekends }) => {
       title: 'Reviews Missed',
       value: stats.totalMissed,
       subtext: 'PR merged without review',
-      icon: '❌'
+      icon: '❌',
+      status: stats.totalMissed > 0 ? 'serious' : undefined
     },
     {
       title: 'Fastest Response',
@@ -183,7 +183,7 @@ const StatsCards = ({ data, dateRange, excludeWeekends }) => {
           <StatTitle>
             {item.icon} {item.title}
           </StatTitle>
-          <StatValue>{item.value}</StatValue>
+          <StatValue data-status={item.status}>{item.value}</StatValue>
           <StatSubtext>{item.subtext}</StatSubtext>
         </StatCard>
       ))}

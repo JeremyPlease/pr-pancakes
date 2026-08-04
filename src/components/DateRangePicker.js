@@ -5,15 +5,14 @@ import dayjs from 'dayjs';
 const DateRangeContainer = styled.div`
   background-color: #161b22;
   border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 16px 20px;
+  margin-bottom: 16px;
 `;
 
 const DateRangeHeader = styled.h3`
   color: #f0c46c;
-  margin-bottom: 16px;
-  font-size: 1.2rem;
+  margin-bottom: 12px;
+  font-size: 1rem;
 `;
 
 const PresetsContainer = styled.div`

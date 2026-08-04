@@ -73,6 +73,14 @@ const CHART_METRICS = [
   { key: 'p90ResponseTime', label: 'P90 Response Time', type: 'line' }
 ];
 
+// Series colors validated for the dark surface (#161b22): CVD-safe pair,
+// in-band lightness, >=3:1 contrast. Blue = incoming requests, syrup gold =
+// submitted reviews (the brand color's chart-safe step).
+const COLOR_REQUESTED = '#2f81f7';
+const COLOR_SUBMITTED = '#bf8700';
+const COLOR_GRID = '#21262d';
+const COLOR_AXIS_TEXT = '#8b949e';
+
 const msToHours = (milliseconds) => {
   if (!milliseconds || milliseconds < 0) return 0;
 
@@ -198,31 +206,35 @@ const VelocityChart = ({ data, dateRange, metric, onMetricChange, timezone, excl
     );
   }
 
+  const axisProps = {
+    stroke: COLOR_AXIS_TEXT,
+    fontSize: 12,
+    axisLine: false,
+    tickLine: false
+  };
+
   const renderChart = () => {
     if (selectedMetric.type === 'bar') {
       return (
-        <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-          <XAxis
-            dataKey="date"
-            stroke="#8b949e"
-            fontSize={12}
-          />
-          <YAxis
-            stroke="#8b949e"
-            fontSize={12}
-          />
-          <Tooltip content={<CustomTooltip metric={selectedMetric} />} />
+        <BarChart data={chartData} barGap={2}>
+          <CartesianGrid vertical={false} stroke={COLOR_GRID} />
+          <XAxis dataKey="date" {...axisProps} />
+          <YAxis {...axisProps} allowDecimals={false} />
+          <Tooltip content={<CustomTooltip metric={selectedMetric} />} cursor={{ fill: 'rgba(240, 196, 108, 0.06)' }} />
           <Legend />
           <Bar
             dataKey="reviewsRequested"
-            fill="#6e7681"
+            fill={COLOR_REQUESTED}
             name="Reviews Requested"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={28}
           />
           <Bar
             dataKey="reviewsSubmitted"
-            fill="#f0c46c"
+            fill={COLOR_SUBMITTED}
             name="Reviews Submitted"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={28}
           />
         </BarChart>
       );
@@ -230,25 +242,20 @@ const VelocityChart = ({ data, dateRange, metric, onMetricChange, timezone, excl
       const dataKey = selectedMetric.key;
       return (
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-          <XAxis
-            dataKey="date"
-            stroke="#8b949e"
-            fontSize={12}
-          />
+          <CartesianGrid vertical={false} stroke={COLOR_GRID} />
+          <XAxis dataKey="date" {...axisProps} />
           <YAxis
-            stroke="#8b949e"
-            fontSize={12}
-            label={{ value: 'Hours', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#8b949e' } }}
+            {...axisProps}
+            label={{ value: 'Hours', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: COLOR_AXIS_TEXT } }}
           />
-          <Tooltip content={<CustomTooltip metric={selectedMetric} />} />
+          <Tooltip content={<CustomTooltip metric={selectedMetric} />} cursor={{ stroke: COLOR_GRID }} />
           <Line
             type="monotone"
             dataKey={dataKey}
-            stroke="#f0c46c"
-            strokeWidth={3}
-            dot={{ fill: '#f0c46c', strokeWidth: 2, r: 4 }}
-            activeDot={{ r: 6, stroke: '#f0c46c', strokeWidth: 2 }}
+            stroke={COLOR_SUBMITTED}
+            strokeWidth={2}
+            dot={{ fill: COLOR_SUBMITTED, strokeWidth: 0, r: 3 }}
+            activeDot={{ r: 5, stroke: '#161b22', strokeWidth: 2 }}
           />
         </LineChart>
       );

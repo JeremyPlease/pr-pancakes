@@ -31,26 +31,19 @@ const Table = styled.table`
 const Th = styled.th`
   background-color: #21262d;
   color: #c9d1d9;
-  padding: 16px;
+  padding: 12px 14px;
   text-align: left;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   border-bottom: 1px solid #30363d;
-
-  &:not(:last-child) {
-    border-right: 1px solid #30363d;
-  }
+  white-space: nowrap;
 `;
 
 const Td = styled.td`
-  padding: 16px;
-  border-bottom: 1px solid #30363d;
+  padding: 10px 14px;
+  border-bottom: 1px solid #21262d;
   font-size: 14px;
   color: #c9d1d9;
-
-  &:not(:last-child) {
-    border-right: 1px solid #30363d;
-  }
 `;
 
 const Tr = styled.tr`
