@@ -955,6 +955,22 @@ const RateLimitNotification = styled.div`
 
 
 
+// Simple countdown shown while rate limited. Lives outside App so it isn't
+// redefined (and remounted) on every App render.
+const RateLimitCountdown = () => {
+  const [seconds, setSeconds] = useState(getSecondsUntilRetry());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSeconds(getSecondsUntilRetry());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (seconds <= 0) return 'retrying...';
+  return `retrying in ${seconds} seconds`;
+};
+
 function App() {
   const [token, setToken] = useState(getToken());
   const location = useLocation();
@@ -999,29 +1015,6 @@ function App() {
   });
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [activeButtonId, setActiveButtonId] = useState(null);
-
-      // Simple countdown component for rate limiting
-  const RateLimitCountdown = () => {
-    const [seconds, setSeconds] = useState(getSecondsUntilRetry());
-
-    useEffect(() => {
-      if (!isBlocked()) return;
-
-      const interval = setInterval(() => {
-        const remaining = getSecondsUntilRetry();
-        setSeconds(remaining);
-
-        if (remaining <= 0) {
-          clearInterval(interval);
-        }
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }, [isBlocked()]);
-
-    if (seconds <= 0) return "retrying...";
-    return `retrying in ${seconds} seconds`;
-  };
 
   useEffect(() => {
     // Initialize authentication for local development
@@ -1160,13 +1153,14 @@ function App() {
     window.location.href = getAuthUrl();
   }, []);
 
-  // Add state to track if a fetch is already in progress
-  const [fetchInProgress, setFetchInProgress] = useState(false);
+  // Tracks an in-flight fetch. A ref (not state) so the guard below always
+  // sees the current value — a stale closure here let concurrent fetches
+  // through.
+  const fetchInProgressRef = useRef(false);
 
   const fetchPRs = useCallback(async (isBackgroundRefresh = false) => {
     // Prevent multiple simultaneous fetches
-    if (fetchInProgress) {
-      console.log('Fetch already in progress, skipping...');
+    if (fetchInProgressRef.current) {
       return;
     }
 
@@ -1176,7 +1170,7 @@ function App() {
       return;
     }
 
-    setFetchInProgress(true);
+    fetchInProgressRef.current = true;
     // If this is a background refresh, set backgroundRefreshing instead of loading
     if (isBackgroundRefresh) {
       setBackgroundRefreshing(true);
@@ -1576,9 +1570,15 @@ function App() {
         result.alreadyReviewedPRs?.nodes || []
       ];
       if (rawSearchResults.every(nodes => nodes.length < 100)) {
-        const openPRIds = new Set(rawSearchResults.flat().map(pr => pr.id));
+        const openPRUpdates = new Map(rawSearchResults.flat().map(pr => [pr.id, pr.updatedAt]));
         setDismissedPRs(prev => {
-          const staleIds = Object.keys(prev).filter(id => !openPRIds.has(id));
+          const staleIds = Object.keys(prev).filter(id => {
+            if (!openPRUpdates.has(id)) return true; // merged or closed
+            // An until-update dismissal is spent once the PR has been updated;
+            // the PR is back in its main section, so drop the stale entry.
+            return prev[id].dismissedUntil === 'until-update' &&
+              openPRUpdates.get(id) !== prev[id].lastUpdateTime;
+          });
           if (staleIds.length === 0) return prev;
           const next = { ...prev };
           staleIds.forEach(id => delete next[id]);
@@ -1606,7 +1606,7 @@ function App() {
     } finally {
       setLoading(false);
       setBackgroundRefreshing(false);
-      setFetchInProgress(false);
+      fetchInProgressRef.current = false;
     }
   }, [token, handleTokenExpiration]);
 
@@ -1638,15 +1638,22 @@ function App() {
   };
 
   const getSortedPRs = (prs, sortConfig) => {
-    if (!sortConfig.field) return prs;
+    // direction cycles asc -> desc -> null (unsorted)
+    if (!sortConfig.field || !sortConfig.direction) return prs;
 
     return [...prs].sort((a, b) => {
       let aValue, bValue;
 
       switch (sortConfig.field) {
-        case 'number':
-          aValue = `${a.repository.name}/${a.number}`;
-          bValue = `${b.repository.name}/${b.number}`;
+        case 'number': {
+          // Group by repository, then numeric PR number
+          const repoDiff = a.repository.name.localeCompare(b.repository.name);
+          const diff = repoDiff !== 0 ? repoDiff : a.number - b.number;
+          return sortConfig.direction === 'asc' ? diff : -diff;
+        }
+        case 'team':
+          aValue = (a.teamNames || []).join(', ');
+          bValue = (b.teamNames || []).join(', ');
           break;
         case 'title':
           aValue = a.title;
