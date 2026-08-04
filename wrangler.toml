@@ -3,6 +3,3 @@ compatibility_date = "2025-06-29"
 
 # For Cloudflare Pages Functions
 pages_build_output_dir = "./build"
-
-[env.development]
-compatibility_date = "2025-06-29"
