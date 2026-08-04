@@ -379,6 +379,12 @@ const Header = styled.header`
     }
   }
 
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
   .header-buttons {
     display: flex;
     align-items: center;
@@ -453,12 +459,6 @@ const RefreshIconButton = styled.button`
   }
 `;
 
-// Slim right-aligned row above page content
-const ContentToolbar = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 10px;
-`;
 
 const LogoutButton = styled.button`
   display: flex;
@@ -535,10 +535,20 @@ const NavButton = styled(Link)`
   }
 `;
 
+// Standard circular-arrow refresh icon (Feather "rotate-cw")
 const RefreshIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M8 3a5 5 0 0 1 4.546 2.914.5.5 0 0 0 .908-.417A6 6 0 0 0 8 2C5.201 2 2.872 3.757 2.186 6.244a.5.5 0 1 0 .956.291C3.708 4.389 5.67 3 8 3z"/>
-    <path d="M8 13a5 5 0 0 1-4.546-2.914.5.5 0 0 0-.908.417A6 6 0 0 0 8 14c2.799 0 5.128-1.757 5.814-4.244a.5.5 0 1 0-.956-.291C12.292 11.611 10.33 13 8 13z"/>
+  <svg
+    width="15"
+    height="15"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="23 4 23 10 17 10" />
+    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
   </svg>
 );
 
@@ -2043,7 +2053,20 @@ function App() {
     <Container>
       <Header>
         <div className="header-inner">
-          <h1>PR Pancakes</h1>
+          <div className="header-brand">
+            <h1>PR Pancakes</h1>
+            {location.pathname !== '/analytics' && (
+              <RefreshIconButton
+                onClick={handleRefresh}
+                disabled={loading || backgroundRefreshing}
+                data-loading={(loading || backgroundRefreshing).toString()}
+                title="Refresh PRs"
+                aria-label="Refresh PRs"
+              >
+                <RefreshIcon />
+              </RefreshIconButton>
+            )}
+          </div>
           <div className="header-buttons">
             <NavButton to="/" className={location.pathname === '/' ? 'active' : ''}>
               📋 PR Dashboard
@@ -2075,19 +2098,6 @@ function App() {
       )}
 
       <Main>
-      {location.pathname !== '/analytics' && (
-        <ContentToolbar>
-          <RefreshIconButton
-            onClick={handleRefresh}
-            disabled={loading || backgroundRefreshing}
-            data-loading={(loading || backgroundRefreshing).toString()}
-            title="Refresh PRs"
-            aria-label="Refresh PRs"
-          >
-            <RefreshIcon />
-          </RefreshIconButton>
-        </ContentToolbar>
-      )}
       <Routes>
         <Route path="/" element={
           loading ? (
