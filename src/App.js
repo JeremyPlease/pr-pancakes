@@ -3,7 +3,8 @@ import ReactDOM from 'react-dom';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { graphql } from '@octokit/graphql';
-import { formatDistanceToNow, addDays } from 'date-fns';
+import { addDays } from 'date-fns';
+import { distanceToNow } from './time-utils';
 import { initializeAuth, getAuthUrl, getToken, clearToken } from './auth';
 import { isRateLimit, handleRateLimit, resetRateLimit, isBlocked, getSecondsUntilRetry } from './simple-rate-limit';
 import AnalyticsView from './components/AnalyticsView';
@@ -171,29 +172,28 @@ const PRAuthor = styled.span`
   color: #8b949e;
 `;
 
-// "repo #123" reference: dim repo, gold number
+// "repo / #123" reference stacked on two lines so the column stays narrow:
+// dim repo above, gold number below
 const RepoRef = styled.span`
+  display: block;
   white-space: nowrap;
 
   .repo {
+    display: block;
     color: #8b949e;
+    font-size: 12px;
   }
 
   .num {
+    display: block;
     color: #f0c46c;
     font-weight: 600;
   }
 `;
 
-// Clamp long PR titles to two lines
 const PRTitle = styled.div`
   color: #e6edf3;
   font-weight: 500;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  max-width: 420px;
 `;
 
 // Small numeric pill; dims to a dash-like faint number at zero
@@ -1507,7 +1507,7 @@ function App() {
         return {
           ...pr,
           lastReview: userReview
-            ? `${formatDistanceToNow(new Date(userReview.submittedAt))} ago (${userReview.state.toLowerCase()})`
+            ? `${distanceToNow(new Date(userReview.submittedAt))} ago (${userReview.state.toLowerCase()})`
             : 'Never',
           lastReviewDate: userReview ? userReview.submittedAt : null
         };
@@ -1989,11 +1989,11 @@ function App() {
                 )}
                 <ClickableTd>
                   <AgeText data-staleness={getStaleness(pr.createdAt)}>
-                    {formatDistanceToNow(new Date(pr.createdAt))} ago
+                    {distanceToNow(new Date(pr.createdAt))} ago
                   </AgeText>
                 </ClickableTd>
                 <ClickableTd>
-                  <AgeText>{formatDistanceToNow(new Date(pr.updatedAt))} ago</AgeText>
+                  <AgeText>{distanceToNow(new Date(pr.updatedAt))} ago</AgeText>
                 </ClickableTd>
                 {section === 'authored' && (
                   <ClickableTd style={{ whiteSpace: 'nowrap' }}>
@@ -2099,7 +2099,7 @@ function App() {
                       <ClickableTd>
                         {dismissedUntil === 'forever' ? 'Forever' :
                          dismissedUntil === 'until-update' ? 'Until updated' :
-                         formatDistanceToNow(new Date(dismissedUntil)) + ' remaining'}
+                         distanceToNow(new Date(dismissedUntil)) + ' remaining'}
                       </ClickableTd>
                       <Td>
                         <RestoreButton

@@ -298,9 +298,7 @@ const ReviewTable = ({ data, dateRange, page, onPageChange, timezone, excludeWee
                   color: '#8b949e',
                   fontSize: '12px',
                   marginTop: '4px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  overflowWrap: 'anywhere',
                   maxWidth: '300px'
                 }}>
                   {row.title}

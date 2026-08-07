@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { formatDistanceToNow } from 'date-fns';
+import { distanceToNow } from '../time-utils';
 
 const FocusContainer = styled.div`
   padding: 4px 0 20px;
@@ -89,9 +89,7 @@ const Card = styled.button`
     min-width: 0;
     color: #e6edf3;
     font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .meta {
@@ -211,7 +209,7 @@ const buildBuckets = (prs, isDismissed) => {
       desc: 'Direct review requests, oldest first — they miss you.',
       accent: '#f0c46c',
       items: visible(prs.directReview).sort(byOldestCreated),
-      meta: (pr) => `opened ${formatDistanceToNow(new Date(pr.createdAt))} ago`
+      meta: (pr) => `opened ${distanceToNow(new Date(pr.createdAt))} ago`
     },
     {
       key: 'team',
@@ -220,7 +218,7 @@ const buildBuckets = (prs, isDismissed) => {
       desc: 'Requests to your teams — grab one before it goes cold.',
       accent: '#2f81f7',
       items: visible(prs.teamReview).sort(byOldestCreated),
-      meta: (pr) => `${pr.teamNames?.join(', ') || 'team'} · ${formatDistanceToNow(new Date(pr.createdAt))} ago`
+      meta: (pr) => `${pr.teamNames?.join(', ') || 'team'} · ${distanceToNow(new Date(pr.createdAt))} ago`
     }
   ];
 };
