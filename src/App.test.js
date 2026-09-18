@@ -3,6 +3,11 @@
  * These tests verify the specific bugs that were identified and fixed
  */
 
+import React from 'react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import RefreshControls from './components/RefreshControls';
+import { shortTimeAgo } from './time-utils';
+
 // Test the localStorage JSON parsing safety function
 describe('localStorage JSON parsing safety', () => {
   let originalLocalStorage;
@@ -191,6 +196,65 @@ describe('Dropdown positioning logic', () => {
     // Test bottom edge collision
     position = calculatePosition(buttonRect, 100, 160, viewportWidth, viewportHeight);
     expect(position.top).toBe(10); // Moved above button: max(10, 50 - 160)
+  });
+});
+
+describe('shortTimeAgo', () => {
+  const ago = (ms) => new Date(Date.now() - ms);
+  const MINUTE = 60000;
+  const HOUR = 60 * MINUTE;
+
+  test('formats relative times compactly', () => {
+    expect(shortTimeAgo(ago(30000))).toBe('just now');
+    expect(shortTimeAgo(ago(5 * MINUTE))).toBe('5m ago');
+    expect(shortTimeAgo(ago(3 * HOUR).toISOString())).toBe('3h ago');
+    expect(shortTimeAgo(ago(47 * HOUR))).toBe('47h ago');
+    expect(shortTimeAgo(ago(48 * HOUR))).toBe('2d ago');
+  });
+});
+
+describe('RefreshControls', () => {
+  const renderControls = (props = {}) => {
+    const handlers = { onRefresh: jest.fn(), onToggleAutoRefresh: jest.fn() };
+    render(
+      <RefreshControls
+        refreshing={false}
+        autoRefresh={false}
+        lastRefreshedAt={null}
+        {...handlers}
+        {...props}
+      />
+    );
+    return handlers;
+  };
+
+  test('exposes auto refresh as an accessible switch', () => {
+    const { onRefresh, onToggleAutoRefresh } = renderControls();
+    const autoSwitch = screen.getByRole('switch', { name: 'Auto refresh' });
+
+    expect(autoSwitch).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/come back to this tab/);
+
+    fireEvent.click(autoSwitch);
+    expect(onToggleAutoRefresh).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh PRs' }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows a placeholder until the first refresh, then a ticking relative time', () => {
+    jest.useFakeTimers();
+    renderControls();
+    expect(screen.getByText('—')).toBeInTheDocument();
+
+    renderControls({ lastRefreshedAt: new Date() });
+    expect(screen.getByText('just now')).toHaveAttribute('title', expect.stringMatching(/^Last refreshed /));
+
+    act(() => {
+      jest.advanceTimersByTime(90000);
+    });
+    expect(screen.getByText('1m ago')).toBeInTheDocument();
+    jest.useRealTimers();
   });
 });
 

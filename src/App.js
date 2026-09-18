@@ -9,6 +9,7 @@ import { initializeAuth, getAuthUrl, getToken, clearToken } from './auth';
 import { isRateLimit, handleRateLimit, resetRateLimit, isBlocked, getSecondsUntilRetry } from './simple-rate-limit';
 import AnalyticsView from './components/AnalyticsView';
 import FocusView from './components/FocusView';
+import RefreshControls from './components/RefreshControls';
 
 const Container = styled.div`
   margin: 0 auto;
@@ -400,6 +401,11 @@ const Header = styled.header`
       gap: 12px;
     }
 
+    .header-brand {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
     .header-buttons {
       width: 100%;
       justify-content: center;
@@ -415,49 +421,6 @@ const Main = styled.main`
   padding: 0 20px 24px;
 `;
 
-// Compact icon-only refresh, shown in the content toolbar of the views it
-// actually refreshes (dashboard and Short Stack)
-const RefreshIconButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  background: #21262d;
-  color: #c9d1d9;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-
-  &:hover:not(:disabled) {
-    background: #30363d;
-    border-color: #f0c46c;
-    color: #f0c46c;
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-
-  svg {
-    transition: transform 0.3s ease;
-  }
-
-  &:hover:not(:disabled) svg {
-    transform: rotate(180deg);
-  }
-
-  &[data-loading="true"] svg {
-    animation: icon-spin 1.5s linear infinite;
-  }
-
-  @keyframes icon-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-`;
 
 
 const UserMenuWrapper = styled.div`
@@ -598,23 +561,6 @@ const NavButton = styled(Link)`
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 `;
-
-// Standard circular-arrow refresh icon (Feather "rotate-cw")
-const RefreshIcon = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="23 4 23 10 17 10" />
-    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-  </svg>
-);
 
 const LogoutIcon = () => (
   <svg
@@ -1145,6 +1091,8 @@ function App() {
   });
   const [loading, setLoading] = useState(false);
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(safeParseJSON('autoRefreshEnabled', false) === true);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [sorting, setSorting] = useState({
     authored: { field: null, direction: null },
     directReview: { field: null, direction: null },
@@ -1594,6 +1542,7 @@ function App() {
 
       // Reset rate limiting on successful request
       resetRateLimit();
+      setLastRefreshedAt(new Date());
     } catch (error) {
       console.error('Error fetching PRs:', error);
 
@@ -1622,11 +1571,11 @@ function App() {
     }
   }, [token, fetchPRs]);
 
-  // Refresh PRs when returning to the page, but not on analytics —
-  // that view manages its own data.
+  // With auto refresh on, refresh PRs when returning to the page, but not on
+  // analytics — that view manages its own data.
   useEffect(() => {
     const handleWindowFocus = () => {
-      if (token && location.pathname !== '/analytics') {
+      if (autoRefresh && token && location.pathname !== '/analytics') {
         fetchPRs(true); // Pass true to indicate this is a background refresh
       }
     };
@@ -1635,7 +1584,7 @@ function App() {
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
     };
-  }, [token, fetchPRs, location.pathname]);
+  }, [autoRefresh, token, fetchPRs, location.pathname]);
 
   const handleLogin = () => {
     // Clear any existing token before redirecting
@@ -1852,6 +1801,12 @@ function App() {
       mentioned: { field: null, direction: null },
       alreadyReviewed: { field: null, direction: null }
     });
+  };
+
+  const handleToggleAutoRefresh = () => {
+    const next = !autoRefresh;
+    setAutoRefresh(next);
+    localStorage.setItem('autoRefreshEnabled', JSON.stringify(next));
   };
 
   const handleRefresh = () => {
@@ -2148,15 +2103,13 @@ function App() {
           <div className="header-brand">
             <h1>PR Pancakes</h1>
             {location.pathname !== '/analytics' && (
-              <RefreshIconButton
-                onClick={handleRefresh}
-                disabled={loading || backgroundRefreshing}
-                data-loading={(loading || backgroundRefreshing).toString()}
-                title="Refresh PRs"
-                aria-label="Refresh PRs"
-              >
-                <RefreshIcon />
-              </RefreshIconButton>
+              <RefreshControls
+                onRefresh={handleRefresh}
+                refreshing={loading || backgroundRefreshing}
+                autoRefresh={autoRefresh}
+                onToggleAutoRefresh={handleToggleAutoRefresh}
+                lastRefreshedAt={lastRefreshedAt}
+              />
             )}
           </div>
           <div className="header-buttons">
