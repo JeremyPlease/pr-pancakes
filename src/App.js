@@ -10,6 +10,7 @@ import { isRateLimit, handleRateLimit, resetRateLimit, isBlocked, getSecondsUnti
 import AnalyticsView from './components/AnalyticsView';
 import FocusView from './components/FocusView';
 import RefreshControls from './components/RefreshControls';
+import { useAttention } from './useAttention';
 
 const Container = styled.div`
   margin: 0 auto;
@@ -1565,17 +1566,29 @@ function App() {
     }
   }, [token, handleTokenExpiration]);
 
+  const attention = useAttention(token, handleTokenExpiration);
+  const refreshAttention = attention.refresh;
+  const hasAttentionData = !!attention.data;
+  const onShortStack = location.pathname === '/focus';
+
+  // Each view loads its own data the first time it's shown
   useEffect(() => {
-    if (token) {
+    if (!token) return;
+    if (onShortStack) {
+      if (!hasAttentionData) refreshAttention();
+    } else if (location.pathname === '/' && !lastRefreshedAt) {
       fetchPRs();
     }
-  }, [token, fetchPRs]);
+  }, [token, fetchPRs, refreshAttention, hasAttentionData, onShortStack, location.pathname, lastRefreshedAt]);
 
   // With auto refresh on, refresh PRs when returning to the page, but not on
   // analytics — that view manages its own data.
   useEffect(() => {
     const handleWindowFocus = () => {
-      if (autoRefresh && token && location.pathname !== '/analytics') {
+      if (!autoRefresh || !token || location.pathname === '/analytics') return;
+      if (onShortStack) {
+        refreshAttention();
+      } else {
         fetchPRs(true); // Pass true to indicate this is a background refresh
       }
     };
@@ -1584,7 +1597,7 @@ function App() {
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
     };
-  }, [autoRefresh, token, fetchPRs, location.pathname]);
+  }, [autoRefresh, token, fetchPRs, refreshAttention, onShortStack, location.pathname]);
 
   const handleLogin = () => {
     // Clear any existing token before redirecting
@@ -1810,6 +1823,11 @@ function App() {
   };
 
   const handleRefresh = () => {
+    if (onShortStack) {
+      refreshAttention();
+      return;
+    }
+
     // Check if there are already PRs loaded
     const hasPRs = Object.values(prs).some(section => section.length > 0);
 
@@ -2105,10 +2123,10 @@ function App() {
             {location.pathname !== '/analytics' && (
               <RefreshControls
                 onRefresh={handleRefresh}
-                refreshing={loading || backgroundRefreshing}
+                refreshing={onShortStack ? attention.loading : loading || backgroundRefreshing}
                 autoRefresh={autoRefresh}
                 onToggleAutoRefresh={handleToggleAutoRefresh}
-                lastRefreshedAt={lastRefreshedAt}
+                lastRefreshedAt={onShortStack ? attention.refreshedAt : lastRefreshedAt}
               />
             )}
           </div>
@@ -2152,7 +2170,7 @@ function App() {
         </div>
       </Header>
 
-      {backgroundRefreshing && (
+      {(onShortStack ? attention.loading && hasAttentionData : backgroundRefreshing) && (
         <BackgroundRefreshPill>
           <LoadingSpinner style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
           Refreshing PRs...
@@ -2207,9 +2225,9 @@ function App() {
         } />
         <Route path="/focus" element={
           <FocusView
-            prs={prs}
-            isDismissed={isDismissed}
-            loading={loading}
+            data={attention.data}
+            loading={attention.loading}
+            error={attention.error}
           />
         } />
         <Route path="/analytics" element={

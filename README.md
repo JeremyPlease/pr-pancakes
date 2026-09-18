@@ -12,6 +12,7 @@ a
 - 🥞 See PRs that need your review
 - 🥞 Monitor team review requests
 - 🥞 Keep track of PRs where you're mentioned
+- 🥞 Short Stack: everything that needs your attention — review requests, replies & mentions, your PRs' status, PRs updated since your review, and PRs merged without you
 - 🥞 Dismiss PRs you don't want to see
 - 🥞 Dark theme for comfortable viewing
 
