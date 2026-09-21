@@ -36,8 +36,9 @@ const PR_FIELDS = `
     ... on ClosedEvent{actor{login}}
   }}`;
 const VIEWER_QUERY = 'query{viewer{login}}';
-const SEARCH_QUERY = `query($q:String!,$endCursor:String){search(query:$q,type:ISSUE,first:20,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{... on PullRequest{${PR_FIELDS}}}}}`;
-const PR_QUERY = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){${PR_FIELDS}}}}`;
+const SEARCH_QUERY = 'query($q:String!,$endCursor:String){search(query:$q,type:ISSUE,first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{... on PullRequest{url}}}}';
+const PR_BATCH_SIZE = 20;
+const PR_BATCHES_IN_FLIGHT = 3;
 
 const maxAt = items => items.map(i => i.at).filter(Boolean).sort().at(-1) ?? '';
 const minAt = items => items.map(i => i.at).filter(Boolean).sort()[0] ?? '';
@@ -238,11 +239,20 @@ const participatingPrs = async (token, since, page = 1) => {
   return notifications.length === perPage ? [...tagged, ...await participatingPrs(token, since, page + 1)] : tagged;
 };
 
-const fetchPr = async (gql, url) => {
-  const [, owner, name, number] = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-  const result = await gql(PR_QUERY, { owner, name, number: Number(number) }).catch(() => null);
-  return result?.repository?.pullRequest ?? null;
+const PR_URL = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/;
+const chunk = (items, size) => (items.length ? [items.slice(0, size), ...chunk(items.slice(size), size)] : []);
+
+const fetchPrBatch = async (gql, urls) => {
+  const selections = urls.map((url, i) => {
+    const [, owner, name, number] = url.match(PR_URL);
+    return `p${i}:repository(owner:"${owner}",name:"${name}"){pullRequest(number:${number}){${PR_FIELDS}}}`;
+  });
+  const result = await gql(`query{${selections.join(' ')}}`);
+  return urls.map((_, i) => result[`p${i}`]?.pullRequest ?? null);
 };
+
+const fetchPrs = async (gql, urls) =>
+  (await inBatches(chunk(urls, PR_BATCH_SIZE), PR_BATCHES_IN_FLIGHT, batch => fetchPrBatch(gql, batch))).flat();
 
 const inBatches = async (items, size, fn) =>
   items.length
@@ -277,15 +287,14 @@ export const fetchAttention = async token => {
     ...notified
   ];
   const sourcesByUrl = tagged.reduce((acc, { url, source }) => ({ ...acc, [url]: [...(acc[url] ?? []), source] }), {});
-  const searched = new Map(results.flat().map(pr => [pr.url, pr]));
-  const extraUrls = [...new Set(notified.map(n => n.url))].filter(url => !searched.has(url));
-  const extras = (await inBatches(extraUrls, 5, async url => ({ pr: await fetchPr(gql, url), sources: sourcesByUrl[url] })))
+  const urls = [...new Set(tagged.map(t => t.url))];
+  const found = (await fetchPrs(gql, urls))
+    .map((pr, i) => ({ pr, sources: sourcesByUrl[urls[i]] }))
     .filter(({ pr }) => pr);
-  const found = [...searched.values()].map(pr => ({ pr, sources: sourcesByUrl[pr.url] }));
 
   return {
     generatedAt: new Date(now).toISOString(),
     login: viewer.viewer.login,
-    prs: buildCards([...found, ...extras], viewer.viewer.login, now)
+    prs: buildCards(found, viewer.viewer.login, now)
   };
 };
