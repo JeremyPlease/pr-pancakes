@@ -65,6 +65,11 @@ export const buildCards = (found, login, now = Date.now(), config = ATTENTION_CO
     return requests.some(e => isMe(e.requestedReviewer)) || !teams.length ? 'you' : `team ${teams.join(', ')}`;
   };
 
+  const reviewedBy = pr => pr.latestReviews.nodes
+    .filter(r => r.author?.login)
+    .map(r => `${r.author.login}${r.state === 'APPROVED' ? ' ✅' : ''}`)
+    .join(', ');
+
   const conversationReasons = (pr, mine, myLast) => {
     const fresh = a => isOther(a.author) && a.at > myLast && a.at >= lookbackStart;
     const threads = pr.reviewThreads.nodes
@@ -100,8 +105,8 @@ export const buildCards = (found, login, now = Date.now(), config = ATTENTION_CO
     }
     const review = pr.viewerLatestReview;
     if (!review && requests.length && sources.includes('reviewNotification')) {
-      const reviewers = [...new Set(pr.latestReviews.nodes.map(r => r.author?.login).filter(Boolean))];
-      const outcome = reviewers.length ? `already reviewed by ${reviewers.join(', ')}` : 'request since removed';
+      const reviewers = reviewedBy(pr);
+      const outcome = reviewers ? `already reviewed by ${reviewers}` : 'request since removed';
       return [{ kind: 'fyi-request-gone', at: maxAt(requests.map(e => ({ at: e.createdAt }))), url: pr.url, text: `Review requested from ${requestedFrom(requests)} — ${outcome}` }];
     }
     const pushed = pr.commits.nodes[0]?.commit.committedDate;
@@ -138,10 +143,11 @@ export const buildCards = (found, login, now = Date.now(), config = ATTENTION_CO
     const requested = sources.includes('closedRequested') || sources.includes('reviewNotification');
     if (pr.state === 'OPEN' || !requested || pr.viewerLatestReview || myLast || ignored) return [];
     const requests = reviewRequestEvents(pr);
-    const whose = !requests.length || requests.some(e => isMe(e.requestedReviewer)) ? 'your review' : `a review from ${requestedFrom(requests)}`;
+    const direct = !requests.length || requests.some(e => isMe(e.requestedReviewer));
+    const detail = direct ? '' : ` — requested from ${requestedFrom(requests)}; ${reviewedBy(pr) ? `reviewed by ${reviewedBy(pr)}` : 'nobody reviewed'}`;
     const event = pr.timelineItems.nodes.findLast(e => ['MergedEvent', 'ClosedEvent'].includes(e.__typename));
     const verb = pr.state === 'MERGED' ? 'Merged' : 'Closed';
-    return [{ kind: 'fyi-closed', at: pr.closedAt, url: pr.url, text: `${verb} by ${event?.actor?.login ?? 'someone'} without ${whose}` }];
+    return [{ kind: 'fyi-closed', at: pr.closedAt, url: pr.url, text: `${verb} by ${event?.actor?.login ?? 'someone'} without your review${detail}` }];
   };
 
   const sectionOf = (pr, mine, reasons) => {

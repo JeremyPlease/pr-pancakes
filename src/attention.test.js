@@ -90,11 +90,12 @@ describe('buildCards', () => {
     const merged = makePr({
       state: 'MERGED',
       closedAt: '2026-09-17T12:00:00Z',
-      timelineItems: { nodes: [teamRequest, { __typename: 'MergedEvent', actor: { login: 'alice' } }] }
+      timelineItems: { nodes: [teamRequest, { __typename: 'MergedEvent', actor: { login: 'alice' } }] },
+      latestReviews: { nodes: [aliceReview, { author: { __typename: 'User', login: 'bob' }, state: 'APPROVED', submittedAt: '2026-09-17T11:30:00Z' }] }
     });
     const approvedByMe = { ...merged, viewerLatestReview: { state: 'APPROVED', submittedAt: '2026-09-17T10:00:00Z' } };
 
-    expect(cardFor(merged, ['closedRequested'])).toMatchObject({ section: 'fyi', reasons: [expect.objectContaining({ text: 'Merged by alice without a review from team syrup' })] });
+    expect(cardFor(merged, ['closedRequested'])).toMatchObject({ section: 'fyi', reasons: [expect.objectContaining({ text: 'Merged by alice without your review — requested from team syrup; reviewed by alice, bob ✅' })] });
     expect(cardFor(approvedByMe, ['closedRequested'])).toBeUndefined();
   });
 
