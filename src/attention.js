@@ -60,6 +60,11 @@ export const buildCards = (found, login, now = Date.now(), config = ATTENTION_CO
   const isOther = a => !!a && a.__typename !== 'Bot' && !isMe(a);
   const mentionsMe = text => new RegExp(`@${login}\\b`, 'i').test(unquoted(text));
 
+  const requestedFrom = requests => {
+    const teams = [...new Set(requests.map(e => e.requestedReviewer?.slug).filter(Boolean))];
+    return requests.some(e => isMe(e.requestedReviewer)) || !teams.length ? 'you' : `team ${teams.join(', ')}`;
+  };
+
   const conversationReasons = (pr, mine, myLast) => {
     const fresh = a => isOther(a.author) && a.at > myLast && a.at >= lookbackStart;
     const threads = pr.reviewThreads.nodes
@@ -94,6 +99,11 @@ export const buildCards = (found, login, now = Date.now(), config = ATTENTION_CO
       return [{ kind: 'review-team', at, url: pr.url, text: `Review requested from team ${teams.join(', ')}` }];
     }
     const review = pr.viewerLatestReview;
+    if (!review && requests.length && sources.includes('reviewNotification')) {
+      const reviewers = [...new Set(pr.latestReviews.nodes.map(r => r.author?.login).filter(Boolean))];
+      const outcome = reviewers.length ? `already reviewed by ${reviewers.join(', ')}` : 'request since removed';
+      return [{ kind: 'fyi-request-gone', at: maxAt(requests.map(e => ({ at: e.createdAt }))), url: pr.url, text: `Review requested from ${requestedFrom(requests)} — ${outcome}` }];
+    }
     const pushed = pr.commits.nodes[0]?.commit.committedDate;
     if (!review?.submittedAt || !pushed || pushed <= review.submittedAt) return [];
     return review.state === 'APPROVED'
@@ -125,10 +135,13 @@ export const buildCards = (found, login, now = Date.now(), config = ATTENTION_CO
 
   const closedReasons = (pr, sources, myLast) => {
     const ignored = config.fyiIgnoreTitles.some(p => new RegExp(p, 'i').test(pr.title));
-    if (pr.state === 'OPEN' || !sources.includes('closedRequested') || pr.viewerLatestReview || myLast || ignored) return [];
+    const requested = sources.includes('closedRequested') || sources.includes('reviewNotification');
+    if (pr.state === 'OPEN' || !requested || pr.viewerLatestReview || myLast || ignored) return [];
+    const requests = reviewRequestEvents(pr);
+    const whose = !requests.length || requests.some(e => isMe(e.requestedReviewer)) ? 'your review' : `a review from ${requestedFrom(requests)}`;
     const event = pr.timelineItems.nodes.findLast(e => ['MergedEvent', 'ClosedEvent'].includes(e.__typename));
     const verb = pr.state === 'MERGED' ? 'Merged' : 'Closed';
-    return [{ kind: 'fyi-closed', at: pr.closedAt, url: pr.url, text: `${verb} by ${event?.actor?.login ?? 'someone'} without your review` }];
+    return [{ kind: 'fyi-closed', at: pr.closedAt, url: pr.url, text: `${verb} by ${event?.actor?.login ?? 'someone'} without ${whose}` }];
   };
 
   const sectionOf = (pr, mine, reasons) => {
@@ -202,7 +215,7 @@ const searchAll = async (gql, q, endCursor = null) => {
   return pageInfo.hasNextPage ? [...prs, ...await searchAll(gql, q, pageInfo.endCursor)] : prs;
 };
 
-const participatingPrUrls = async (token, since, page = 1) => {
+const participatingPrs = async (token, since, page = 1) => {
   const perPage = 50;
   const response = await fetch(
     `https://api.github.com/notifications?all=true&participating=true&since=${since}&per_page=${perPage}&page=${page}`,
@@ -210,10 +223,13 @@ const participatingPrUrls = async (token, since, page = 1) => {
   );
   if (!response.ok) return [];
   const notifications = await response.json();
-  const urls = notifications
-    .filter(n => n.subject.type === 'PullRequest' && n.reason !== 'review_requested')
-    .map(n => `${n.repository.html_url}/pull/${n.subject.url.split('/').pop()}`);
-  return notifications.length === perPage ? [...urls, ...await participatingPrUrls(token, since, page + 1)] : urls;
+  const tagged = notifications
+    .filter(n => n.subject.type === 'PullRequest')
+    .map(n => ({
+      url: `${n.repository.html_url}/pull/${n.subject.url.split('/').pop()}`,
+      source: n.reason === 'review_requested' ? 'reviewNotification' : 'notification'
+    }));
+  return notifications.length === perPage ? [...tagged, ...await participatingPrs(token, since, page + 1)] : tagged;
 };
 
 const fetchPr = async (gql, url) => {
@@ -240,30 +256,30 @@ export const fetchAttention = async token => {
     involves: `involves:@me updated:>=${since}`,
     reviewed: `reviewed-by:@me updated:>=${since}`,
     requested: 'is:open review-requested:@me',
-    closedRequested: `is:closed user-review-requested:@me closed:>=${since}`,
+    closedRequested: `is:closed review-requested:@me closed:>=${since}`,
     authored: 'is:open author:@me'
   };
 
   const [viewer, notified, ...results] = await Promise.all([
     gql(VIEWER_QUERY),
-    participatingPrUrls(token, lookbackStart).catch(() => []),
+    participatingPrs(token, lookbackStart).catch(() => []),
     ...Object.values(queries).map(q => searchAll(gql, `is:pr archived:false ${q}`))
   ]);
 
-  const sourcesByUrl = Object.keys(queries).reduce(
-    (acc, source, i) => results[i].reduce((inner, pr) => ({ ...inner, [pr.url]: [...(inner[pr.url] ?? []), source] }), acc),
-    {}
-  );
-  const searched = [...new Map(results.flat().map(pr => [pr.url, pr])).values()]
-    .map(pr => ({ pr, sources: sourcesByUrl[pr.url] }));
-  const extraUrls = [...new Set(notified)].filter(url => !sourcesByUrl[url]);
-  const extras = (await inBatches(extraUrls, 5, url => fetchPr(gql, url)))
-    .filter(Boolean)
-    .map(pr => ({ pr, sources: ['notification'] }));
+  const tagged = [
+    ...Object.keys(queries).flatMap((source, i) => results[i].map(pr => ({ url: pr.url, source }))),
+    ...notified
+  ];
+  const sourcesByUrl = tagged.reduce((acc, { url, source }) => ({ ...acc, [url]: [...(acc[url] ?? []), source] }), {});
+  const searched = new Map(results.flat().map(pr => [pr.url, pr]));
+  const extraUrls = [...new Set(notified.map(n => n.url))].filter(url => !searched.has(url));
+  const extras = (await inBatches(extraUrls, 5, async url => ({ pr: await fetchPr(gql, url), sources: sourcesByUrl[url] })))
+    .filter(({ pr }) => pr);
+  const found = [...searched.values()].map(pr => ({ pr, sources: sourcesByUrl[pr.url] }));
 
   return {
     generatedAt: new Date(now).toISOString(),
     login: viewer.viewer.login,
-    prs: buildCards([...searched, ...extras], viewer.viewer.login, now)
+    prs: buildCards([...found, ...extras], viewer.viewer.login, now)
   };
 };

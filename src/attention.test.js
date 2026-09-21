@@ -76,6 +76,28 @@ describe('buildCards', () => {
     expect(conflicting.key).not.toBe(approved.key);
   });
 
+  const teamRequest = { __typename: 'ReviewRequestedEvent', createdAt: '2026-09-17T09:00:00Z', requestedReviewer: { __typename: 'Team', slug: 'syrup' } };
+  const aliceReview = { author: alice, state: 'COMMENTED', submittedAt: '2026-09-17T11:00:00Z' };
+
+  it('keeps an open team request in FYI after a teammate reviewed and the request vanished', () => {
+    const card = cardFor(makePr({ timelineItems: { nodes: [teamRequest] }, latestReviews: { nodes: [aliceReview] } }), ['reviewNotification']);
+
+    expect(card.section).toBe('fyi');
+    expect(card.reasons[0].text).toBe('Review requested from team syrup — already reviewed by alice');
+  });
+
+  it('shows team-requested PRs merged without my review, but not ones I reviewed', () => {
+    const merged = makePr({
+      state: 'MERGED',
+      closedAt: '2026-09-17T12:00:00Z',
+      timelineItems: { nodes: [teamRequest, { __typename: 'MergedEvent', actor: { login: 'alice' } }] }
+    });
+    const approvedByMe = { ...merged, viewerLatestReview: { state: 'APPROVED', submittedAt: '2026-09-17T10:00:00Z' } };
+
+    expect(cardFor(merged, ['closedRequested'])).toMatchObject({ section: 'fyi', reasons: [expect.objectContaining({ text: 'Merged by alice without a review from team syrup' })] });
+    expect(cardFor(approvedByMe, ['closedRequested'])).toBeUndefined();
+  });
+
   it('drops PRs with nothing to act on', () => {
     expect(buildCards([{ pr: makePr(), sources: ['involves'] }], 'me', NOW)).toEqual([]);
   });
